@@ -1955,6 +1955,34 @@ def get_default_user_id():
     return row["id"] if row else None
 
 
+def get_user_settings_summary(user_id=None):
+    owner_id = user_id if user_id is not None else current_user_id()
+    if owner_id is None:
+        return {
+            "auth_provider": "local",
+            "auth_provider_label": "Local",
+            "created_at_label": "Sin fecha",
+        }
+    row = pg_fetch_one_dict(
+        "SELECT auth_provider, created_at FROM users WHERE id = %s",
+        (owner_id,),
+    )
+    provider = (row or {}).get("auth_provider") or "local"
+    provider_label = "Google" if provider == "google" else "Local"
+    created_raw = (row or {}).get("created_at")
+    created_label = "Sin fecha"
+    if isinstance(created_raw, datetime):
+        created_label = created_raw.strftime("%Y-%m-%d")
+    elif created_raw:
+        created_text = str(created_raw).strip()
+        created_label = created_text[:10] if len(created_text) >= 10 else created_text
+    return {
+        "auth_provider": provider,
+        "auth_provider_label": provider_label,
+        "created_at_label": created_label,
+    }
+
+
 def backfill_user_ownership(default_user_id):
     if default_user_id is None:
         return
@@ -2375,6 +2403,7 @@ def index():
     category_options = get_category_options()
     project_options = get_projects(user_id=owner_id)
     tag_options = get_tags(user_id=owner_id)
+    user_settings = get_user_settings_summary(user_id=owner_id)
     project_progress_map = get_project_progress_map(user_id=owner_id)
     for project in project_options:
         project.update(project_progress_map.get(project["id"], {
@@ -2429,6 +2458,7 @@ def index():
         activity_logs=activity_logs,
         category_options=category_options,
         project_options=project_options,
+        user_settings=user_settings,
         selected_project_id=selected_project_id,
         selected_tag_id=selected_tag_id,
         tag_options=tag_options,

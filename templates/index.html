@@ -78,12 +78,43 @@
 
       <div class="sidebar-auth">
         <p class="sidebar-group">Cuenta</p>
-        <div class="sidebar-user">{{ current_user.name }}</div>
-        <form action="{{ url_for('logout') }}" method="post">
+        <div class="sidebar-user">
+          <span class="sidebar-user-name">{{ current_user.name }}</span>
+        </div>
+        <form action="{{ url_for('logout') }}" method="post" class="js-logout-form">
           <button type="submit" class="sidebar-logout-btn">Cerrar sesión</button>
         </form>
       </div>
     </aside>
+    <div class="global-user-menu" id="global-user-menu" data-avatar-seed="{{ (current_user.email or current_user.name)|lower }}">
+      <button
+        type="button"
+        class="global-user-avatar"
+        id="global-user-avatar-btn"
+        aria-label="Usuario {{ current_user.name }}"
+        aria-expanded="false"
+        aria-controls="global-user-dropdown"
+        title="{{ current_user.name }}"
+      >
+        {{ (current_user.name[:1] if current_user.name else 'U')|upper }}
+      </button>
+      <div class="global-user-dropdown" id="global-user-dropdown" role="menu" aria-hidden="true">
+        <div class="global-user-dropdown-head">
+          <strong>{{ current_user.name }}</strong>
+          <span>{{ current_user.email }}</span>
+        </div>
+        <a
+          class="global-user-dropdown-item"
+          href="{{ url_for('index', nav='settings', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}"
+          role="menuitem"
+        >
+          Ajustes
+        </a>
+        <form action="{{ url_for('logout') }}" method="post" class="js-logout-form global-user-dropdown-form">
+          <button type="submit" class="global-user-dropdown-item danger" role="menuitem">Cerrar sesión</button>
+        </form>
+      </div>
+    </div>
 
     <main class="app-main">
       <div class="page">
@@ -97,6 +128,7 @@
       </section>
       {% endif %}
       {% endwith %}
+      {% if current_nav != 'settings' %}
       <section class="global-search ui-block" aria-label="Buscador global">
         <form class="global-search-form" action="{{ url_for('index') }}" method="get">
           <input type="hidden" name="nav" value="{{ current_nav }}">
@@ -125,7 +157,9 @@
           <button type="submit">Buscar</button>
         </form>
       </section>
+      {% endif %}
 
+      {% if current_nav != 'settings' %}
       <header id="app-header" class="card-header ui-block">
         <div class="header-row">
           <div class="header-title">
@@ -187,6 +221,7 @@
         </nav>
         {% endif %}
       </header>
+      {% endif %}
 
       <datalist id="category-options">
         {% for category in category_options %}
@@ -407,13 +442,21 @@
         <article class="dashboard-panel notes-panel ui-block">
           <div class="panel-head">
             <h2>Notas</h2>
-            <span class="metric-line">Completadas: <strong>{{ metrics.notes.completed }}</strong> · Pendientes: <strong>{{ metrics.notes.pending }}</strong></span>
+            <span class="metric-line notes-summary-line">
+              <span class="notes-summary-item completed">Completadas: <strong>{{ metrics.notes.completed }}</strong></span>
+              <span class="notes-summary-divider">·</span>
+              <span class="notes-summary-item pending">Pendientes: <strong>{{ metrics.notes.pending }}</strong></span>
+            </span>
           </div>
           {% if dashboard_hub.recent_notes %}
             <ul class="recent-note-list">
               {% for note in dashboard_hub.recent_notes %}
                 <li class="{{ 'done' if note.completed else '' }}">
-                  <span>{{ note.task_title }}: {{ note.text }}</span>
+                  <span class="note-entry">
+                    <span class="note-entry-title">{{ note.task_title }}</span>
+                    <span class="note-entry-separator">:</span>
+                    <span class="note-entry-content">{{ note.text }}</span>
+                  </span>
                 </li>
               {% endfor %}
             </ul>
@@ -866,7 +909,9 @@
           <article class="stats-chart-card">
             <h3>Tareas por prioridad</h3>
             <div id="stats-priority-legend" class="stats-priority-legend" aria-label="Leyenda por prioridad"></div>
-            <canvas id="stats-priority-chart" height="130"></canvas>
+            <div class="chart-wrapper priority-chart-wrapper">
+              <canvas id="stats-priority-chart"></canvas>
+            </div>
           </article>
           <article class="stats-chart-card">
             <h3>Creadas vs completadas</h3>
@@ -922,6 +967,106 @@
       </section>
       {% endif %}
 
+      {% if current_nav == 'settings' %}
+      <section class="settings-view ui-block" aria-label="Vista de ajustes">
+        <header class="settings-header">
+          <h2>Ajustes</h2>
+          <p>Administra tu cuenta y preferencias.</p>
+        </header>
+
+        <div class="settings-grid">
+          <article class="settings-panel">
+            <h3>Cuenta</h3>
+            <dl class="settings-kv">
+              <div><dt>Nombre</dt><dd>{{ current_user.name }}</dd></div>
+              <div><dt>Email</dt><dd>{{ current_user.email }}</dd></div>
+              <div><dt>Método de acceso</dt><dd>{{ user_settings.auth_provider_label }}</dd></div>
+              <div><dt>Cuenta creada</dt><dd>{{ user_settings.created_at_label }}</dd></div>
+            </dl>
+          </article>
+
+          <article class="settings-panel">
+            <h3>Seguridad</h3>
+            <div class="settings-actions">
+              <button type="button" class="settings-btn settings-btn-secondary" disabled>Cambiar contraseña</button>
+              <form action="{{ url_for('logout') }}" method="post" class="js-logout-form settings-inline-form">
+                <button type="submit" class="settings-btn settings-btn-primary">Cerrar sesión en esta cuenta</button>
+              </form>
+              <button type="button" class="settings-btn settings-btn-secondary" disabled>Cerrar sesión en todos los dispositivos</button>
+            </div>
+          </article>
+
+          <article class="settings-panel">
+            <h3>Apariencia</h3>
+            <div class="settings-field-row">
+              <div>
+                <p class="settings-field-label">Modo oscuro</p>
+                <p class="settings-field-help">Mantén el tema visual coherente con tu flujo.</p>
+              </div>
+              <div class="settings-theme-control" id="settings-theme-control">
+                <span class="settings-theme-chip moon" aria-hidden="true">🌙</span>
+                <button id="settings-theme-toggle" type="button" class="settings-toggle" role="switch" aria-label="Alternar modo oscuro">
+                  <span class="settings-toggle-thumb" aria-hidden="true"></span>
+                </button>
+                <span class="settings-theme-chip sun" aria-hidden="true">☀️</span>
+              </div>
+            </div>
+            <label class="settings-label" for="settings-ui-density">Tamaño de interfaz</label>
+            <select id="settings-ui-density" class="settings-select">
+              <option value="compact">Compacta</option>
+              <option value="normal" selected>Normal</option>
+              <option value="comfortable">Cómoda</option>
+            </select>
+          </article>
+
+          <article class="settings-panel">
+            <h3>Notificaciones</h3>
+            <div class="settings-switch-list">
+              <div class="settings-switch-row">
+                <span class="settings-switch-label">Recordatorios de tareas</span>
+                <label class="settings-inline-switch">
+                  <input id="settings-reminders-toggle" type="checkbox">
+                  <span class="settings-inline-switch-ui" data-on="ON" data-off="OFF" aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="settings-switch-row">
+                <span class="settings-switch-label">Alertas de vencimiento</span>
+                <label class="settings-inline-switch">
+                  <input id="settings-overdue-toggle" type="checkbox">
+                  <span class="settings-inline-switch-ui" data-on="ON" data-off="OFF" aria-hidden="true"></span>
+                </label>
+              </div>
+            </div>
+          </article>
+
+          <article class="settings-panel">
+            <h3>Datos</h3>
+            <div class="settings-data-actions">
+              <a class="settings-btn settings-btn-secondary" href="{{ url_for('export_data', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort, nav=current_nav) }}">Exportar datos</a>
+              <form class="settings-import-form feedback-form" action="{{ url_for('import_data') }}" method="post" enctype="multipart/form-data">
+                <label for="settings_import_file" class="sr-only">Importar JSON</label>
+                <input id="settings_import_file" name="import_file" type="file" accept="application/json,.json" required>
+                <input type="hidden" name="filter" value="{{ current_filter }}">
+                <input type="hidden" name="q" value="{{ current_search }}">
+                <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+                <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="nav" value="{{ current_nav }}">
+                <button type="submit" class="settings-btn settings-btn-primary">Importar datos</button>
+              </form>
+            </div>
+          </article>
+
+          <article class="settings-panel danger">
+            <h3>Zona peligrosa</h3>
+            <p>Eliminar tu cuenta borrará permanentemente tu información.</p>
+            <button type="button" class="settings-btn settings-btn-danger" disabled>Eliminar cuenta</button>
+          </article>
+        </div>
+      </section>
+      {% endif %}
+
       {% if current_nav == 'tasks' %}
       <section class="tasks-section ui-block">
       {% include "_tasks_list.html" %}
@@ -934,16 +1079,113 @@
   {% if current_nav == 'stats' %}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   {% endif %}
+  <div id="logout-confirm-modal" class="logout-confirm-modal" aria-hidden="true">
+    <div class="logout-confirm-card" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title">
+      <h3 id="logout-confirm-title">¿Cerrar sesión?</h3>
+      <p>¿Seguro que deseas cerrar sesión en esta cuenta?</p>
+      <div class="logout-confirm-actions">
+        <button type="button" id="logout-confirm-cancel" class="logout-cancel-btn">Cancelar</button>
+        <button type="button" id="logout-confirm-submit" class="logout-submit-btn">Cerrar sesión</button>
+      </div>
+    </div>
+  </div>
   <button id="scroll-top-btn" class="scroll-top-btn" type="button" aria-label="Volver arriba">↑</button>
   <script>
     (() => {
       const SCROLL_STATE_KEY = "todo-scroll-state";
+      const UI_DENSITY_KEY = "todo-ui-density";
+      const REMINDER_PREF_KEY = "todo-reminders-enabled";
+      const OVERDUE_PREF_KEY = "todo-overdue-alerts-enabled";
       const toggle = document.getElementById("theme-toggle");
+      const settingsThemeToggle = document.getElementById("settings-theme-toggle");
+      const settingsThemeControl = document.getElementById("settings-theme-control");
+      const settingsDensitySelect = document.getElementById("settings-ui-density");
+      const settingsRemindersToggle = document.getElementById("settings-reminders-toggle");
+      const settingsOverdueToggle = document.getElementById("settings-overdue-toggle");
+      const logoutForms = Array.from(document.querySelectorAll(".js-logout-form"));
+      const globalUserMenu = document.getElementById("global-user-menu");
+      const globalUserAvatar = document.getElementById("global-user-avatar-btn");
+      const globalUserDropdown = document.getElementById("global-user-dropdown");
+      const logoutConfirmModal = document.getElementById("logout-confirm-modal");
+      const logoutConfirmCancel = document.getElementById("logout-confirm-cancel");
+      const logoutConfirmSubmit = document.getElementById("logout-confirm-submit");
       const headerModeSelect = document.getElementById("header-mode-select");
       const refreshViewBtn = document.getElementById("refresh-view-btn");
       const scrollTopBtn = document.getElementById("scroll-top-btn");
       const getTheme = () => document.documentElement.getAttribute("data-theme") || "dark";
       const getHeaderMode = () => document.documentElement.getAttribute("data-header-mode") || "sticky";
+      const getUiDensity = () => document.documentElement.getAttribute("data-ui-density") || "normal";
+      let pendingLogoutForm = null;
+
+      function hashString(value) {
+        const text = String(value || "");
+        let hash = 0;
+        for (let i = 0; i < text.length; i += 1) {
+          hash = ((hash << 5) - hash) + text.charCodeAt(i);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      }
+
+      function avatarColorFromSeed(seed) {
+        const hash = hashString(seed);
+        const hue = hash % 360;
+        const sat = 58 + (hash % 14);
+        const light = 42 + (hash % 8);
+        return `hsl(${hue} ${sat}% ${light}%)`;
+      }
+
+      if (globalUserAvatar) {
+        const seed =
+          (globalUserMenu && globalUserMenu.dataset.avatarSeed) ||
+          globalUserAvatar.textContent ||
+          "user";
+        const bg = avatarColorFromSeed(seed);
+        globalUserAvatar.style.setProperty("--avatar-bg", bg);
+      }
+
+      function closeGlobalUserDropdown() {
+        if (!globalUserMenu || !globalUserAvatar || !globalUserDropdown) return;
+        globalUserMenu.classList.remove("open");
+        globalUserAvatar.setAttribute("aria-expanded", "false");
+        globalUserDropdown.setAttribute("aria-hidden", "true");
+      }
+
+      function openGlobalUserDropdown() {
+        if (!globalUserMenu || !globalUserAvatar || !globalUserDropdown) return;
+        globalUserMenu.classList.add("open");
+        globalUserAvatar.setAttribute("aria-expanded", "true");
+        globalUserDropdown.setAttribute("aria-hidden", "false");
+      }
+
+      if (globalUserAvatar && globalUserDropdown && globalUserMenu) {
+        globalUserAvatar.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (globalUserMenu.classList.contains("open")) {
+            closeGlobalUserDropdown();
+          } else {
+            openGlobalUserDropdown();
+          }
+        });
+
+        globalUserDropdown.addEventListener("click", (event) => {
+          if (!(event.target instanceof Element)) return;
+          const clickedMenuAction = event.target.closest(".global-user-dropdown-item");
+          if (clickedMenuAction && clickedMenuAction.tagName === "A") {
+            closeGlobalUserDropdown();
+          }
+        });
+
+        document.addEventListener("click", (event) => {
+          if (!(event.target instanceof Element)) {
+            closeGlobalUserDropdown();
+            return;
+          }
+          if (!globalUserMenu.contains(event.target)) {
+            closeGlobalUserDropdown();
+          }
+        });
+      }
 
       function getActionTargetSelector(node) {
         if (!node) return "";
@@ -1212,6 +1454,14 @@
         const isLight = theme === "light";
         toggle.classList.toggle("is-light", isLight);
         toggle.setAttribute("aria-checked", isLight ? "true" : "false");
+        if (settingsThemeToggle) {
+          settingsThemeToggle.classList.toggle("is-light", isLight);
+          settingsThemeToggle.setAttribute("aria-checked", isLight ? "true" : "false");
+        }
+        if (settingsThemeControl) {
+          settingsThemeControl.classList.toggle("is-light", isLight);
+          settingsThemeControl.classList.toggle("is-dark", !isLight);
+        }
       }
 
       function applyTheme(theme) {
@@ -1227,6 +1477,49 @@
           applyTheme(current === "dark" ? "light" : "dark");
         });
       }
+
+      if (settingsThemeToggle) {
+        updateThemeUI();
+        settingsThemeToggle.addEventListener("click", () => {
+          const current = getTheme();
+          applyTheme(current === "dark" ? "light" : "dark");
+        });
+      }
+
+      function applyUiDensity(mode) {
+        const value = mode === "compact" || mode === "comfortable" ? mode : "normal";
+        document.documentElement.setAttribute("data-ui-density", value);
+        localStorage.setItem(UI_DENSITY_KEY, value);
+        if (settingsDensitySelect) {
+          settingsDensitySelect.value = value;
+        }
+      }
+
+      applyUiDensity(localStorage.getItem(UI_DENSITY_KEY) || getUiDensity());
+
+      if (settingsDensitySelect) {
+        settingsDensitySelect.value = getUiDensity();
+        settingsDensitySelect.addEventListener("change", () => {
+          applyUiDensity(settingsDensitySelect.value);
+        });
+      }
+
+      function initPreferenceToggle(node, key, fallback = true) {
+        if (!node) return;
+        const saved = localStorage.getItem(key);
+        if (saved === null) {
+          node.checked = fallback;
+          localStorage.setItem(key, fallback ? "1" : "0");
+        } else {
+          node.checked = saved === "1";
+        }
+        node.addEventListener("change", () => {
+          localStorage.setItem(key, node.checked ? "1" : "0");
+        });
+      }
+
+      initPreferenceToggle(settingsRemindersToggle, REMINDER_PREF_KEY, true);
+      initPreferenceToggle(settingsOverdueToggle, OVERDUE_PREF_KEY, true);
 
       function applyHeaderMode(mode) {
         const value = mode === "normal" ? "normal" : "sticky";
@@ -1263,6 +1556,53 @@
       if (refreshViewBtn) {
         refreshViewBtn.addEventListener("click", () => {
           window.location.reload();
+        });
+      }
+
+      function closeLogoutConfirmModal() {
+        if (!logoutConfirmModal) return;
+        logoutConfirmModal.classList.remove("open");
+        logoutConfirmModal.setAttribute("aria-hidden", "true");
+        pendingLogoutForm = null;
+      }
+
+      function openLogoutConfirmModal(form) {
+        if (!logoutConfirmModal || !form) return;
+        pendingLogoutForm = form;
+        logoutConfirmModal.classList.add("open");
+        logoutConfirmModal.setAttribute("aria-hidden", "false");
+      }
+
+      logoutForms.forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          openLogoutConfirmModal(form);
+        });
+      });
+
+      if (logoutConfirmCancel) {
+        logoutConfirmCancel.addEventListener("click", () => {
+          closeLogoutConfirmModal();
+        });
+      }
+
+      if (logoutConfirmSubmit) {
+        logoutConfirmSubmit.addEventListener("click", () => {
+          if (!pendingLogoutForm) {
+            closeLogoutConfirmModal();
+            return;
+          }
+          const form = pendingLogoutForm;
+          closeLogoutConfirmModal();
+          form.submit();
+        });
+      }
+
+      if (logoutConfirmModal) {
+        logoutConfirmModal.addEventListener("click", (event) => {
+          if (event.target === logoutConfirmModal) {
+            closeLogoutConfirmModal();
+          }
         });
       }
 
@@ -1485,6 +1825,8 @@
         if (event.key === "Escape") {
           closeCalendarTaskModal();
           closeLabelDeleteModal();
+          closeLogoutConfirmModal();
+          closeGlobalUserDropdown();
         }
       });
 
@@ -1843,7 +2185,8 @@
               },
               options: {
                 responsive: true,
-                maintainAspectRatio: false,
+                maintainAspectRatio: true,
+                aspectRatio: 1,
                 cutout: "72%",
                 animation: {
                   animateRotate: true,
