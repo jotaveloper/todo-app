@@ -22,8 +22,10 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from db import get_connection as get_postgres_connection
 try:
     from authlib.integrations.flask_client import OAuth
-except ImportError:  # pragma: no cover - fallback cuando dependencia no está instalada
+    OAUTH_IMPORT_ERROR = ""
+except Exception as exc:  # pragma: no cover - fallback cuando dependencia no está instalada
     OAuth = None
+    OAUTH_IMPORT_ERROR = str(exc)
 try:
     from dotenv import find_dotenv, load_dotenv
 except ImportError:  # pragma: no cover - fallback cuando dependencia no está instalada
@@ -31,7 +33,10 @@ except ImportError:  # pragma: no cover - fallback cuando dependencia no está i
     find_dotenv = None
 
 if load_dotenv is not None:
-    load_dotenv(find_dotenv() if find_dotenv is not None else None)
+    dotenv_path = find_dotenv(usecwd=True) if find_dotenv is not None else ""
+    if not dotenv_path:
+        dotenv_path = str(Path(__file__).resolve().parent / ".env")
+    load_dotenv(dotenv_path)
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "todoapp-dev-secret-change-this")
@@ -82,16 +87,7 @@ login_manager.login_message = "Inicia sesión para continuar."
 login_manager.login_message_category = "error"
 
 oauth_client = None
-if OAuth is not None:
-    oauth = OAuth(app)
-    if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
-        oauth_client = oauth.register(
-            name="google",
-            server_metadata_url=GOOGLE_DISCOVERY_URL,
-            client_id=GOOGLE_CLIENT_ID,
-            client_secret=GOOGLE_CLIENT_SECRET,
-            client_kwargs={"scope": "openid email profile"},
-        )
+oauth = OAuth(app) if OAuth is not None else None
 
 
 class User(UserMixin):
@@ -163,8 +159,37 @@ def current_user_id():
     return None
 
 
+def get_google_oauth_client():
+    global oauth_client
+    if oauth_client is not None:
+        return oauth_client
+    if oauth is None:
+        return None
+
+    client_id = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+    client_secret = (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
+    discovery_url = (
+        (os.getenv("GOOGLE_DISCOVERY_URL") or "").strip()
+        or "https://accounts.google.com/.well-known/openid-configuration"
+    )
+    if not client_id or not client_secret:
+        return None
+
+    oauth_client = oauth.register(
+        name="google",
+        server_metadata_url=discovery_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        client_kwargs={"scope": "openid email profile"},
+    )
+    return oauth_client
+
+
 def is_google_login_enabled():
-    return oauth_client is not None
+    return bool(
+        (os.getenv("GOOGLE_CLIENT_ID") or "").strip() and
+        (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip()
+    )
 
 
 @app.context_processor
@@ -2164,23 +2189,31 @@ def login():
 def auth_google():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
-    if not is_google_login_enabled():
-        flash("Google login no está configurado en este entorno.", "error")
+    client = get_google_oauth_client()
+    if client is None:
+        if OAUTH_IMPORT_ERROR:
+            flash("Google login no está disponible: falta dependencia OAuth.", "error")
+        else:
+            flash("Google login no está configurado en este entorno.", "error")
         return redirect(url_for("login"))
     redirect_uri = url_for("google_callback", _external=True)
-    return oauth_client.authorize_redirect(redirect_uri)
+    return client.authorize_redirect(redirect_uri)
 
 
 @app.route("/auth/google/callback")
 def google_callback():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
-    if not is_google_login_enabled():
-        flash("Google login no está configurado en este entorno.", "error")
+    client = get_google_oauth_client()
+    if client is None:
+        if OAUTH_IMPORT_ERROR:
+            flash("Google login no está disponible: falta dependencia OAuth.", "error")
+        else:
+            flash("Google login no está configurado en este entorno.", "error")
         return redirect(url_for("login"))
 
     try:
-        token = oauth_client.authorize_access_token()
+        token = client.authorize_access_token()
     except Exception:
         flash("No se pudo completar la autenticación con Google.", "error")
         return redirect(url_for("login"))
@@ -2188,7 +2221,7 @@ def google_callback():
     userinfo = token.get("userinfo") if isinstance(token, dict) else None
     if not userinfo:
         try:
-            userinfo = oauth_client.userinfo()
+            userinfo = client.userinfo()
         except Exception:
             userinfo = None
 
