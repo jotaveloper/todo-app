@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iniciar sesión · TODOAPP</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <h1>Iniciar sesión</h1>
+    <p class="auth-subtitle">Accede a TODOAPP con tu cuenta local.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-stack auth-flash">
+        {% for category, message in messages %}
+          <div class="flash-message {{ category if category in ['ok', 'error'] else 'ok' }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% endwith %}
+
+    <form method="post" class="auth-form">
+      <input type="hidden" name="next" value="{{ request.args.get('next', request.form.get('next', '')) }}">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required autocomplete="email" placeholder="tu@email.com">
+
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••">
+
+      <button type="submit">Iniciar sesión</button>
+    </form>
+
+    {% if google_login_enabled %}
+      <a class="google-placeholder-btn google-login-link" href="{{ url_for('auth_google') }}">Continuar con Google</a>
+    {% else %}
+      <button type="button" class="google-placeholder-btn" disabled>Continuar con Google</button>
+    {% endif %}
+
+    <p class="auth-alt-link">¿No tienes cuenta? <a href="{{ url_for('register') }}">Crear cuenta</a></p>
+  </main>
+</body>
+</html>

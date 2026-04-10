@@ -1,0 +1,2001 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>To-Do List</title>
+  <script>
+    (() => {
+      const savedTheme = localStorage.getItem("todo-theme");
+      const savedHeaderMode = localStorage.getItem("todo-header-mode");
+      const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
+      const initialHeaderMode = savedHeaderMode === "normal" ? "normal" : "sticky";
+      document.documentElement.setAttribute("data-theme", initialTheme);
+      document.documentElement.setAttribute("data-header-mode", initialHeaderMode);
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegación">
+      <div class="sidebar-brand">
+        <span class="brand-icon">✓</span>
+        <div>
+          <strong>TODOAPP</strong>
+          <p>Organiza y avanza</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <p class="sidebar-group">Principal</p>
+        <a class="sidebar-link {{ 'active' if current_nav == 'dashboard' else '' }}" href="{{ url_for('index', nav='dashboard', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">
+          <span class="sidebar-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M3 12.5L12 4l9 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10.5V20h11V10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="sidebar-link-label">Dashboard</span>
+        </a>
+        <a class="sidebar-link {{ 'active' if current_nav == 'tasks' else '' }}" href="{{ url_for('index', nav='tasks', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">
+          <span class="sidebar-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 7h10M9 12h10M9 17h10M4 7h1M4 12h1M4 17h1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="sidebar-link-label">Tareas</span>
+        </a>
+        <a class="sidebar-link {{ 'active' if current_nav == 'calendar' else '' }}" href="{{ url_for('index', nav='calendar', month=current_month, filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">
+          <span class="sidebar-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M7.5 3.5v3M16.5 3.5v3M3.5 9h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          <span class="sidebar-link-label">Calendario</span>
+        </a>
+        <a class="sidebar-link {{ 'active' if current_nav == 'stats' else '' }}" href="{{ url_for('index', nav='stats', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">
+          <span class="sidebar-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 18.5V11M12 18.5V6M19 18.5v-4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 19.5h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          <span class="sidebar-link-label">Estadísticas</span>
+        </a>
+
+        <p class="sidebar-group">Gestión</p>
+        <a class="sidebar-link {{ 'active' if current_nav == 'projects' else '' }}" href="{{ url_for('index', nav='projects', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">
+          <span class="sidebar-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M3.5 8.5a2.5 2.5 0 0 1 2.5-2.5h4l1.5 2h6a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 17.5v-9Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="sidebar-link-label">Proyectos</span>
+        </a>
+        <a class="sidebar-link {{ 'active' if current_nav == 'labels' else '' }}" href="{{ url_for('index', nav='labels', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">
+          <span class="sidebar-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M10 4.5H6.5a2 2 0 0 0-2 2V10l7.8 7.8a2 2 0 0 0 2.8 0l2.7-2.7a2 2 0 0 0 0-2.8L10 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="8" r="1" fill="currentColor"/></svg>
+          </span>
+          <span class="sidebar-link-label">Etiquetas</span>
+        </a>
+        <a class="sidebar-link {{ 'active' if current_nav == 'settings' else '' }}" href="{{ url_for('index', nav='settings', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">
+          <span class="sidebar-link-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M10 3.8h4l.5 2.1a6.8 6.8 0 0 1 1.8.7l1.9-1.1 2.8 2.8-1.1 1.9c.3.6.5 1.2.7 1.8l2.1.5v4l-2.1.5c-.2.6-.4 1.2-.7 1.8l1.1 1.9-2.8 2.8-1.9-1.1a6.8 6.8 0 0 1-1.8.7L14 20.2h-4l-.5-2.1a6.8 6.8 0 0 1-1.8-.7l-1.9 1.1L3 15.7l1.1-1.9a6.8 6.8 0 0 1-.7-1.8L1.3 11v-4l2.1-.5c.2-.6.4-1.2.7-1.8L3 2.8 5.8 0l1.9 1.1c.6-.3 1.2-.5 1.8-.7L10 3.8Z" transform="translate(0 1)" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>
+          </span>
+          <span class="sidebar-link-label">Ajustes</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-auth">
+        <p class="sidebar-group">Cuenta</p>
+        <div class="sidebar-user">{{ current_user.name }}</div>
+        <form action="{{ url_for('logout') }}" method="post">
+          <button type="submit" class="sidebar-logout-btn">Cerrar sesión</button>
+        </form>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <div class="page">
+        <section class="card">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <section class="flash-stack ui-block" aria-label="Mensajes de sistema">
+        {% for category, message in messages %}
+          <div class="flash-message {{ category if category in ['ok', 'error'] else 'ok' }}">{{ message }}</div>
+        {% endfor %}
+      </section>
+      {% endif %}
+      {% endwith %}
+      <section class="global-search ui-block" aria-label="Buscador global">
+        <form class="global-search-form" action="{{ url_for('index') }}" method="get">
+          <input type="hidden" name="nav" value="{{ current_nav }}">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="sort" value="{{ current_sort }}">
+          <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+          <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+          <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+          <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+          <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+          <label for="global_q" class="sr-only">Buscar por categoría</label>
+          <input
+            id="global_q"
+            name="q"
+            type="text"
+            placeholder="Buscar categoría..."
+            value="{{ current_search }}"
+          >
+          <label for="global_date_q" class="sr-only">Filtrar por fecha</label>
+          <input
+            id="global_date_q"
+            name="date_q"
+            type="date"
+            value="{{ current_date_search }}"
+          >
+          <button type="submit">Buscar</button>
+        </form>
+      </section>
+
+      <header id="app-header" class="card-header ui-block">
+        <div class="header-row">
+          <div class="header-title">
+            <p class="eyebrow">Productividad</p>
+            <h1>To-Do List</h1>
+          </div>
+          <div class="header-controls">
+            <button id="refresh-view-btn" class="refresh-view-btn" type="button" aria-label="Refrescar vista actual">
+              <span class="refresh-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M20 4v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span>Refresh</span>
+            </button>
+            <label class="header-mode-control" for="header-mode-select">
+              Header
+              <select id="header-mode-select" aria-label="Comportamiento del header">
+                <option value="sticky">Fijo</option>
+                <option value="normal">Normal</option>
+              </select>
+            </label>
+            <div class="theme-switch-wrap" aria-label="Modo claro y oscuro">
+              <span class="theme-icon">☀️</span>
+              <button id="theme-toggle" class="theme-switch" type="button" role="switch" aria-label="Cambiar entre modo claro y oscuro">
+                <span class="theme-switch-thumb" aria-hidden="true"></span>
+              </button>
+              <span class="theme-icon">🌙</span>
+            </div>
+          </div>
+        </div>
+
+        {% if current_nav == 'dashboard' %}
+        <section class="dashboard dashboard-top" aria-label="Resumen de tareas">
+          <article class="metric-card">
+            <p class="metric-label">Total</p>
+            <p class="metric-value">{{ dashboard.total }}</p>
+          </article>
+          <article class="metric-card">
+            <p class="metric-label">Completadas</p>
+            <p class="metric-value">{{ dashboard.completed }}</p>
+          </article>
+          <article class="metric-card">
+            <p class="metric-label">Pendientes</p>
+            <p class="metric-value">{{ dashboard.pending }}</p>
+          </article>
+          <article class="metric-card">
+            <p class="metric-label">Vencidas</p>
+            <p class="metric-value">{{ dashboard.overdue }}</p>
+          </article>
+        </section>
+        <p class="dashboard-last-completed">{{ dashboard_hub.last_completed_label }}</p>
+        <nav class="dashboard-quick-actions" aria-label="Accesos rápidos del dashboard">
+          <a class="dashboard-quick-link feedback-link" href="{{ url_for('index', nav='tasks', filter='all', q=current_search, date_q=current_date_search, quick_date='today', sort=current_sort, dashboard_from=dashboard_from, dashboard_to=dashboard_to) }}">Hoy</a>
+          <a class="dashboard-quick-link feedback-link" href="{{ url_for('index', nav='tasks', filter='all', q=current_search, date_q=current_date_search, quick_date='week', sort=current_sort, dashboard_from=dashboard_from, dashboard_to=dashboard_to) }}">Esta semana</a>
+          <a class="dashboard-quick-link feedback-link" href="{{ url_for('index', nav='stats', filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, dashboard_from=dashboard_from, dashboard_to=dashboard_to) }}">Reporte</a>
+          <a class="dashboard-quick-link feedback-link" href="{{ url_for('index', nav='calendar', month=current_month, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, dashboard_from=dashboard_from, dashboard_to=dashboard_to) }}">Calendario</a>
+        </nav>
+        {% endif %}
+      </header>
+
+      <datalist id="category-options">
+        {% for category in category_options %}
+          <option value="{{ category }}"></option>
+        {% endfor %}
+      </datalist>
+
+      {% if current_nav == 'projects' %}
+      <section class="projects-view ui-block">
+        <div class="projects-head">
+          <h2>Proyectos</h2>
+          <p>Organiza tareas por proyecto y sigue su progreso.</p>
+        </div>
+
+        <form class="project-form feedback-form" action="{{ url_for('add_project') }}" method="post">
+          <input type="text" name="project_name" placeholder="Nombre del proyecto" required>
+          <input type="text" name="project_description" placeholder="Descripción (opcional)">
+          <input type="color" name="project_color" value="#22c55e" aria-label="Color del proyecto">
+          <input type="date" name="project_due_date" aria-label="Fecha objetivo del proyecto">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="q" value="{{ current_search }}">
+          <input type="hidden" name="date_q" value="{{ current_date_search }}">
+          <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+          <input type="hidden" name="sort" value="{{ current_sort }}">
+          <button type="submit">+ Nuevo Proyecto</button>
+        </form>
+
+        {% if project_options %}
+          <div class="projects-grid">
+            <aside class="projects-list">
+              {% for project in project_options %}
+                <article class="project-card {{ 'active' if selected_project and selected_project.id == project.id else '' }}">
+                  <a class="project-open" href="{{ url_for('index', nav='projects', project_id=project.id, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort) }}">
+                    <h3>{{ project.name }}</h3>
+                    <p>{{ project.description or 'Sin descripción' }}</p>
+                    <div class="project-progress">
+                      <span>{{ project.completed_tasks }}/{{ project.total_tasks }} completadas</span>
+                      <strong>{{ project.progress_percent }}%</strong>
+                    </div>
+                  </a>
+                  <form action="{{ url_for('delete_project', project_id=project.id) }}" method="post" onsubmit="return confirm('¿Eliminar proyecto?')">
+                    <input type="hidden" name="filter" value="{{ current_filter }}">
+                    <input type="hidden" name="q" value="{{ current_search }}">
+                    <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                    <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                    <input type="hidden" name="sort" value="{{ current_sort }}">
+                    <button type="submit" class="project-delete-btn">Eliminar</button>
+                  </form>
+                </article>
+              {% endfor %}
+            </aside>
+
+            <section class="project-detail">
+              {% if selected_project %}
+                <form class="project-form feedback-form" action="{{ url_for('edit_project', project_id=selected_project.id) }}" method="post">
+                  <input type="text" name="project_name" value="{{ selected_project.name }}" required>
+                  <input type="text" name="project_description" value="{{ selected_project.description }}">
+                  <input type="color" name="project_color" value="{{ selected_project.color or '#22c55e' }}" aria-label="Color del proyecto">
+                  <input type="date" name="project_due_date" value="{{ selected_project.due_date or '' }}">
+                  <select name="project_status">
+                    <option value="active" {{ 'selected' if selected_project.status == 'active' else '' }}>Activo</option>
+                    <option value="completed" {{ 'selected' if selected_project.status == 'completed' else '' }}>Completado</option>
+                  </select>
+                  <button type="submit">Guardar proyecto</button>
+                </form>
+                <h3>Tareas del proyecto</h3>
+                {% if project_tasks %}
+                  <ul class="project-task-list">
+                    {% for task in project_tasks %}
+                      <li class="{{ 'done' if task.completed else '' }}">
+                        <span>{{ task.text }}</span>
+                        <small>{{ 'Completada' if task.completed else 'Pendiente' }}</small>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <p>No hay tareas asociadas.</p>
+                {% endif %}
+              {% else %}
+                <p>Selecciona un proyecto para ver detalle y tareas asociadas.</p>
+              {% endif %}
+            </section>
+          </div>
+        {% else %}
+          <p class="empty">Aún no hay proyectos creados.</p>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'labels' %}
+      <section class="labels-view ui-block">
+        <div class="labels-head">
+          <h2>Etiquetas</h2>
+          <p>Gestiona etiquetas reutilizables para clasificar tareas.</p>
+        </div>
+        <form class="label-form feedback-form js-label-create-form" action="{{ url_for('add_tag') }}" method="post">
+          <div class="label-create-input-wrap">
+            <label for="label-create-name" class="sr-only">Nombre etiqueta</label>
+            <input id="label-create-name" type="text" name="tag_name" placeholder="Nombre de etiqueta" required>
+          </div>
+          <div class="label-create-color-wrap">
+            <span id="label-create-color-preview" class="label-create-color-preview" style="--tag-color: #22c55e;" aria-hidden="true"></span>
+            <label for="label-create-color" class="sr-only">Color etiqueta</label>
+            <input id="label-create-color" type="color" name="tag_color" value="#22c55e" aria-label="Color etiqueta">
+          </div>
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="q" value="{{ current_search }}">
+          <input type="hidden" name="date_q" value="{{ current_date_search }}">
+          <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+          <input type="hidden" name="sort" value="{{ current_sort }}">
+          <button type="submit">Crear etiqueta</button>
+        </form>
+
+        <div id="labels-toast" class="labels-toast" role="status" aria-live="polite" hidden></div>
+        {% if tag_options %}
+          <ul class="label-list modern">
+            {% for tag in tag_options %}
+              <li class="label-item" data-label-item data-label-name="{{ tag.name }}">
+                <div class="label-display">
+                  <a class="label-chip filter-chip" href="{{ url_for('index', nav='tasks', filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, tag_id=tag.id) }}" style="--tag-color: {{ tag.color }};">
+                    {{ tag.name }}
+                  </a>
+                  <span class="label-task-count">{{ tag.task_count }} tareas</span>
+                </div>
+                <div class="label-actions">
+                  <button type="button" class="label-action-btn label-edit-trigger" aria-label="Editar etiqueta {{ tag.name }}">✏️ Editar</button>
+                  <button type="button" class="label-action-btn label-delete-trigger" aria-label="Eliminar etiqueta {{ tag.name }}">🗑️ Eliminar</button>
+                </div>
+                <form class="label-form-inline feedback-form label-edit-form" action="{{ url_for('edit_tag', tag_id=tag.id) }}" method="post" hidden>
+                  <input type="text" name="tag_name" value="{{ tag.name }}" required>
+                  <input type="color" name="tag_color" value="{{ tag.color }}" aria-label="Color etiqueta">
+                  <input type="hidden" name="filter" value="{{ current_filter }}">
+                  <input type="hidden" name="q" value="{{ current_search }}">
+                  <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                  <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                  <input type="hidden" name="sort" value="{{ current_sort }}">
+                </form>
+                <form class="label-delete-form" action="{{ url_for('delete_tag', tag_id=tag.id) }}" method="post">
+                  <input type="hidden" name="filter" value="{{ current_filter }}">
+                  <input type="hidden" name="q" value="{{ current_search }}">
+                  <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                  <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                  <input type="hidden" name="sort" value="{{ current_sort }}">
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="empty">No hay etiquetas aún.</p>
+        {% endif %}
+
+        <div id="label-delete-modal" class="label-delete-modal" aria-hidden="true">
+          <div class="label-delete-modal-card" role="dialog" aria-modal="true" aria-labelledby="label-delete-title">
+            <h3 id="label-delete-title">Eliminar etiqueta</h3>
+            <p id="label-delete-message">¿Eliminar etiqueta? Esta acción no se puede deshacer.</p>
+            <div class="label-delete-modal-actions">
+              <button id="label-delete-cancel" type="button" class="label-modal-cancel">Cancelar</button>
+              <button id="label-delete-confirm" type="button" class="label-modal-confirm">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'dashboard' %}
+      <section class="dashboard-range ui-block" aria-label="Filtro de rango del dashboard">
+        <form class="dashboard-range-form feedback-form" action="{{ url_for('index') }}" method="get">
+          <input type="hidden" name="nav" value="dashboard">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="q" value="{{ current_search }}">
+          <input type="hidden" name="date_q" value="{{ current_date_search }}">
+          <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+          <input type="hidden" name="sort" value="{{ current_sort }}">
+          <label for="dashboard_from">Desde</label>
+          <input id="dashboard_from" name="dashboard_from" type="date" value="{{ dashboard_from }}">
+          <label for="dashboard_to">Hasta</label>
+          <input id="dashboard_to" name="dashboard_to" type="date" value="{{ dashboard_to }}">
+          <button type="submit">Aplicar</button>
+        </form>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="dashboard-panel progress-panel ui-block">
+          <h2>Progreso</h2>
+          <div class="progress-content">
+            <div class="progress-ring" data-progress="{{ '%.2f'|format(metrics.completion_rate) }}">
+              <span>{{ metrics.completion_rate }}%</span>
+            </div>
+            <div class="progress-stats">
+              <p class="metric-line">Completadas hoy: <strong>{{ metrics.completed_today }}</strong></p>
+              <p class="metric-line">Completadas esta semana: <strong>{{ metrics.completed_week }}</strong></p>
+              <p class="metric-line">Porcentaje completado: <strong>{{ metrics.completion_rate }}%</strong></p>
+            </div>
+          </div>
+        </article>
+
+        <article class="dashboard-panel recent-panel ui-block">
+          <div class="panel-head">
+            <h2>Tareas recientes</h2>
+            <a class="panel-link" href="{{ url_for('index', nav='tasks', filter='all', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, dashboard_from=dashboard_from, dashboard_to=dashboard_to) }}">Ver tareas</a>
+          </div>
+          {% if dashboard_hub.recent_tasks %}
+            <ul class="recent-task-list">
+              {% for item in dashboard_hub.recent_tasks %}
+                <li>
+                  <span class="recent-task-title">{{ item.title }}</span>
+                  <span class="status-badge {{ 'completed' if item.status == 'Completada' else 'pending' }}">{{ item.status }}</span>
+                  <span class="priority-badge priority-{{ item.priority }}">{{ item.priority|capitalize }}</span>
+                  <time>{{ item.time_ago }}</time>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="metric-line">Sin tareas recientes.</p>
+          {% endif %}
+        </article>
+
+        <article class="dashboard-panel notes-panel ui-block">
+          <div class="panel-head">
+            <h2>Notas</h2>
+            <span class="metric-line">Completadas: <strong>{{ metrics.notes.completed }}</strong> · Pendientes: <strong>{{ metrics.notes.pending }}</strong></span>
+          </div>
+          {% if dashboard_hub.recent_notes %}
+            <ul class="recent-note-list">
+              {% for note in dashboard_hub.recent_notes %}
+                <li class="{{ 'done' if note.completed else '' }}">
+                  <span>{{ note.task_title }}: {{ note.text }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="metric-line">Sin notas recientes.</p>
+          {% endif %}
+        </article>
+
+        <article class="dashboard-panel priority-panel ui-block">
+          <h2>Por Prioridad</h2>
+          {% set total_priority = metrics.priority.alta + metrics.priority.media + metrics.priority.baja %}
+          {% for label, value, key in [('Alta', metrics.priority.alta, 'alta'), ('Media', metrics.priority.media, 'media'), ('Baja', metrics.priority.baja, 'baja')] %}
+            {% set pct = ((value * 100 / total_priority) if total_priority else 0) %}
+            <div class="priority-row">
+              <span>{{ label }}</span>
+              <div class="priority-bar"><i class="priority-fill {{ key }}" data-width="{{ '%.2f'|format(pct) }}"></i></div>
+              <strong>{{ value }}</strong>
+            </div>
+          {% endfor %}
+        </article>
+
+        <article class="dashboard-panel categories ui-block">
+          <div class="panel-head">
+            <h2>Por Categoría</h2>
+            <a class="panel-link" href="{{ url_for('index', nav='tasks', filter='all', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort='priority', dashboard_from=dashboard_from, dashboard_to=dashboard_to) }}">Ver en tareas</a>
+          </div>
+          {% if metrics.categories %}
+            <ul>
+              {% for item in metrics.categories %}
+                <li>
+                  <span>{{ item.name }}</span>
+                  <strong>{{ item.total }}</strong>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="metric-line">Sin categorías aún.</p>
+          {% endif %}
+        </article>
+
+        <article class="dashboard-panel date-summary ui-block">
+          <h2>Resumen por fecha</h2>
+          <div class="date-summary-grid">
+            <div><span>Vencidas</span><strong>{{ date_view.overdue|length }}</strong></div>
+            <div><span>Hoy</span><strong>{{ date_view.today|length }}</strong></div>
+            <div><span>Próximas</span><strong>{{ date_view.upcoming|length }}</strong></div>
+          </div>
+          {% if reminders.overdue or reminders.upcoming %}
+            <p class="metric-line">Recordatorios activos: <strong>{{ reminders.overdue|length + reminders.upcoming|length }}</strong></p>
+          {% else %}
+            <p class="metric-line">Sin recordatorios activos.</p>
+          {% endif %}
+        </article>
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'tasks' %}
+      <section class="create-section ui-block">
+        <div class="task-intake-grid">
+          <article class="task-intake-card category-card">
+            <header class="task-intake-head">
+              <h2>Categorías</h2>
+              <p>Crea y organiza categorías reutilizables para tus tareas.</p>
+            </header>
+
+            <form class="category-form feedback-form" action="{{ url_for('add_category') }}" method="post">
+              <label for="new_category" class="sr-only">Nueva categoría</label>
+              <input id="new_category" name="new_category" type="text" placeholder="Crear categoría personalizada...">
+              <input type="hidden" name="filter" value="{{ current_filter }}">
+              <input type="hidden" name="q" value="{{ current_search }}">
+              <input type="hidden" name="date_q" value="{{ current_date_search }}">
+              <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+              <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+              <input type="hidden" name="sort" value="{{ current_sort }}">
+              <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+              <button type="submit">Guardar categoría</button>
+            </form>
+
+            {% if category_message %}
+              <p
+                class="category-message {{ category_status if category_status in ['ok', 'error', 'deleted'] else 'error' }}"
+                {% if category_status == 'deleted' %}data-auto-dismiss="true"{% endif %}
+              >
+                {{ category_message }}
+              </p>
+            {% endif %}
+
+            {% if category_options %}
+              <details class="category-dropdown">
+                <summary>Categorías guardadas ({{ category_options|length }})</summary>
+                <ul class="category-dropdown-list">
+                  {% for category in category_options %}
+                    <li>
+                      <span class="category-item-name">{{ category }}</span>
+                      <form class="category-delete-form" action="{{ url_for('delete_category') }}" method="post">
+                        <input type="hidden" name="category_name" value="{{ category }}">
+                        <input type="hidden" name="filter" value="{{ current_filter }}">
+                        <input type="hidden" name="q" value="{{ current_search }}">
+                        <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                        <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+                        <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+                        <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                        <input type="hidden" name="sort" value="{{ current_sort }}">
+                        <input type="hidden" name="nav" value="{{ current_nav }}">
+                        <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+                        <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+                        <button class="category-delete-trigger" type="button" aria-label="Eliminar categoría {{ category }}">×</button>
+                        <div class="category-delete-confirm" hidden>
+                          <span>¿Eliminar?</span>
+                          <button class="category-confirm-btn" type="submit">Confirmar</button>
+                          <button class="category-cancel-btn" type="button">Cancelar</button>
+                        </div>
+                      </form>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </details>
+            {% endif %}
+          </article>
+
+          <article class="task-intake-card add-task-card">
+            <header class="task-intake-head">
+              <h2>Agregar tarea</h2>
+              <p>Completa los campos clave para registrar una tarea rápidamente.</p>
+            </header>
+            <form class="add-form feedback-form js-async-action" action="{{ url_for('add_task') }}" method="post">
+              <div class="add-main-row">
+                <div class="add-field add-title-field">
+                  <label for="text">Título</label>
+                  <input id="text" name="text" type="text" placeholder="Escribe una nueva tarea..." required>
+                </div>
+                <div class="add-submit-wrap">
+                  <button type="submit">Agregar</button>
+                </div>
+              </div>
+
+              <div class="add-details-grid">
+                <div class="add-field">
+                  <label for="notes">Notas</label>
+                  <input id="notes" name="notes" type="text" placeholder="Notas (opcional)">
+                </div>
+                <div class="add-field">
+                  <label for="category">Categoría</label>
+                  <input id="category" name="category" type="text" placeholder="Categoría" list="category-options">
+                </div>
+                <div class="add-field">
+                  <label for="project_id">Proyecto</label>
+                  <select id="project_id" name="project_id">
+                    <option value="">Sin proyecto</option>
+                    {% for project in project_options %}
+                      <option value="{{ project.id }}" {{ 'selected' if selected_project_id and selected_project_id == project.id else '' }}>
+                        {{ project.name }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="add-field">
+                  <label for="tag_ids">Etiquetas</label>
+                  <select id="tag_ids" name="tag_ids" multiple>
+                    {% for tag in tag_options %}
+                      <option value="{{ tag.id }}" {{ 'selected' if selected_tag_id and selected_tag_id == tag.id else '' }}>{{ tag.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="add-field">
+                  <label for="priority">Prioridad</label>
+                  <select id="priority" name="priority">
+                    <option value="baja">Baja</option>
+                    <option value="media" selected>Media</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </div>
+                <div class="add-field">
+                  <label for="recurrence">Recurrencia</label>
+                  <select id="recurrence" name="recurrence">
+                    <option value="" selected>Sin recurrencia</option>
+                    <option value="daily">Diaria</option>
+                    <option value="weekly">Semanal</option>
+                    <option value="monthly">Mensual</option>
+                  </select>
+                </div>
+                <div class="add-field">
+                  <label for="due_date">Fecha</label>
+                  <input id="due_date" name="due_date" type="date">
+                </div>
+              </div>
+              <input type="hidden" name="filter" value="{{ current_filter }}">
+              <input type="hidden" name="q" value="{{ current_search }}">
+              <input type="hidden" name="date_q" value="{{ current_date_search }}">
+              <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+              <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+              <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+              <input type="hidden" name="sort" value="{{ current_sort }}">
+              <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+            </form>
+          </article>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'tasks' %}
+      <section class="data-tools ui-block" aria-label="Respaldo de datos">
+        <div class="data-tools-header">
+          <div>
+            <h2>Respaldo</h2>
+            <p>Exporta o importa tu información en formato JSON.</p>
+          </div>
+          <a
+            class="export-link"
+            href="{{ url_for('export_data', filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort, nav=current_nav) }}"
+          >
+            Exportar JSON
+          </a>
+        </div>
+        <form class="import-form feedback-form" action="{{ url_for('import_data') }}" method="post" enctype="multipart/form-data">
+          <label for="import_file" class="sr-only">Importar archivo JSON</label>
+          <input id="import_file" name="import_file" type="file" accept="application/json,.json" required>
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="q" value="{{ current_search }}">
+          <input type="hidden" name="date_q" value="{{ current_date_search }}">
+          <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+          <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+          <input type="hidden" name="sort" value="{{ current_sort }}">
+          <input type="hidden" name="nav" value="{{ current_nav }}">
+          <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+          <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+          <button type="submit">Importar JSON</button>
+        </form>
+        {% if import_message %}
+          <p class="import-message {{ 'ok' if import_status == 'ok' else 'error' }}">
+            {{ import_message }}
+          </p>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'tasks' %}
+      <section class="filters-section ui-block">
+        <div class="tasks-header">
+          <h2>Tareas</h2>
+          <nav class="task-tabs" aria-label="Vista de tareas">
+            <a class="task-tab {{ 'active' if current_filter == 'all' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='all', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Todas</a>
+            <a class="task-tab {{ 'active' if current_filter == 'pending' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='pending', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Pendientes</a>
+            <a class="task-tab {{ 'active' if current_filter == 'completed' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='completed', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Completadas</a>
+          </nav>
+        </div>
+
+        <form class="search-sort feedback-form" action="{{ url_for('index') }}" method="get">
+          <input type="hidden" name="filter" value="{{ current_filter }}">
+          <input type="hidden" name="nav" value="{{ current_nav }}">
+          <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+          <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+          <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+          <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+          <label for="q" class="sr-only">Buscar categoría</label>
+          <input id="q" name="q" type="text" placeholder="Buscar categoría..." value="{{ current_search }}">
+          <label for="date_q" class="sr-only">Filtrar por fecha</label>
+          <input id="date_q" name="date_q" type="date" value="{{ current_date_search }}">
+          <label for="quick_date" class="sr-only">Vista rápida</label>
+          <select id="quick_date" name="quick_date">
+            <option value="" {{ 'selected' if current_quick_date == '' else '' }}>Sin vista rápida</option>
+            <option value="today" {{ 'selected' if current_quick_date == 'today' else '' }}>Hoy</option>
+            <option value="week" {{ 'selected' if current_quick_date == 'week' else '' }}>Esta semana</option>
+          </select>
+          <label for="sort" class="sr-only">Ordenar tareas</label>
+          <select id="sort" name="sort">
+            <option value="created_desc" {{ 'selected' if current_sort == 'created_desc' else '' }}>Creación: más nuevas</option>
+            <option value="created_asc" {{ 'selected' if current_sort == 'created_asc' else '' }}>Creación: más antiguas</option>
+            <option value="priority" {{ 'selected' if current_sort == 'priority' else '' }}>Prioridad</option>
+            <option value="due_date" {{ 'selected' if current_sort == 'due_date' else '' }}>Fecha límite</option>
+          </select>
+          <label for="tag_id" class="sr-only">Filtrar por etiqueta</label>
+          <select id="tag_id" name="tag_id">
+            <option value="">Todas las etiquetas</option>
+            {% for tag in tag_options %}
+              <option value="{{ tag.id }}" {{ 'selected' if selected_tag_id and selected_tag_id == tag.id else '' }}>{{ tag.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Aplicar</button>
+        </form>
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'calendar' %}
+      <section class="calendar-view ui-block" aria-label="Vista de calendario">
+        <header class="calendar-header">
+          <div>
+            <h2>Calendario</h2>
+            <p>{{ calendar_view.month_label }}</p>
+          </div>
+          <div class="calendar-nav">
+            <a href="{{ url_for('index', nav='calendar', month=calendar_view.prev_month, filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">← Mes anterior</a>
+            <a href="{{ url_for('index', nav='calendar', month=calendar_view.today_month, filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">Hoy</a>
+            <a href="{{ url_for('index', nav='calendar', month=calendar_view.next_month, filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">Mes siguiente →</a>
+          </div>
+        </header>
+
+        <div class="calendar-grid">
+          {% for day_name in calendar_view.weekdays %}
+            <div class="calendar-weekday">{{ day_name }}</div>
+          {% endfor %}
+
+          {% for week in calendar_view.weeks %}
+            {% for day in week %}
+              <article class="calendar-day {{ '' if day.in_month else 'outside' }} {{ 'today' if day.is_today else '' }}" data-date="{{ day.date }}">
+                <header>
+                  <span>{{ day.day }}</span>
+                </header>
+                <div class="calendar-events">
+                  {% if day.tasks %}
+                    {% for task in day.tasks[:3] %}
+                      <div
+                        class="calendar-event priority-{{ task.priority }} {{ 'done' if task.completed else '' }}"
+                        draggable="true"
+                        data-task-id="{{ task.id }}"
+                        role="button"
+                        tabindex="0"
+                        aria-label="Ver detalle de tarea"
+                      >
+                        <span class="dot priority-{{ task.priority }}"></span>
+                        <span class="label">{{ task.text }}</span>
+                      </div>
+                    {% endfor %}
+                    {% if day.tasks|length > 3 %}
+                      <small>+{{ day.tasks|length - 3 }} más</small>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          {% endfor %}
+        </div>
+        <script id="calendar-task-details" type="application/json">{{ calendar_view.task_details | tojson }}</script>
+
+        <div id="calendar-task-modal" class="calendar-task-modal" aria-hidden="true">
+          <div class="calendar-task-modal-card" role="dialog" aria-modal="true" aria-label="Detalle de tarea">
+            <header>
+              <h3 id="calendar-task-title">Detalle de tarea</h3>
+              <button id="calendar-task-close" type="button" aria-label="Cerrar detalle">✕</button>
+            </header>
+            <div class="calendar-task-meta">
+              <p><strong>Categoría:</strong> <span id="calendar-task-category">-</span></p>
+              <p><strong>Prioridad:</strong> <span id="calendar-task-priority">-</span></p>
+              <p><strong>Fecha:</strong> <span id="calendar-task-date">-</span></p>
+              <p><strong>Nota:</strong> <span id="calendar-task-note">-</span></p>
+            </div>
+            <section class="calendar-task-notes">
+              <h4>Notas</h4>
+              <ul id="calendar-task-notes-list"></ul>
+            </section>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'stats' %}
+      <section class="stats-view ui-block" aria-label="Vista de estadísticas">
+        <header class="stats-head">
+          <div class="stats-head-main">
+            <h2>Estadísticas</h2>
+            <p>Centro analítico de productividad con datos reales.</p>
+          </div>
+          <form class="stats-range-form" action="{{ url_for('index') }}" method="get">
+            <input type="hidden" name="nav" value="stats">
+            <input type="hidden" name="filter" value="{{ current_filter }}">
+            <input type="hidden" name="q" value="{{ current_search }}">
+            <input type="hidden" name="date_q" value="{{ current_date_search }}">
+            <input type="hidden" name="sort" value="{{ current_sort }}">
+            <div class="stats-range-pills" role="tablist" aria-label="Rango de estadísticas">
+              <button type="submit" name="stats_range" value="7" class="stats-range-pill {{ 'active' if stats_view.range_days == 7 else '' }}">7 días</button>
+              <button type="submit" name="stats_range" value="30" class="stats-range-pill {{ 'active' if stats_view.range_days == 30 else '' }}">30 días</button>
+              <button type="submit" name="stats_range" value="90" class="stats-range-pill {{ 'active' if stats_view.range_days == 90 else '' }}">90 días</button>
+            </div>
+          </form>
+        </header>
+
+        <section class="stats-cards">
+          <article class="stats-card primary">
+            <p>Total tareas</p>
+            <strong>{{ stats_view.cards.total }}</strong>
+            <span>Snapshot actual</span>
+          </article>
+          <article class="stats-card success">
+            <p>% completado</p>
+            <strong>{{ stats_view.cards.completion_rate }}%</strong>
+            <span>{{ stats_view.range_label }}</span>
+          </article>
+          <article class="stats-card">
+            <p>Completadas</p>
+            <strong>{{ stats_view.cards.completed }}</strong>
+            <span>{{ stats_view.range_label }}</span>
+          </article>
+          <article class="stats-card">
+            <p>Creadas</p>
+            <strong>{{ stats_view.cards.created }}</strong>
+            <span>{{ stats_view.range_label }}</span>
+          </article>
+          <article class="stats-card warning">
+            <p>Pendientes</p>
+            <strong>{{ stats_view.cards.pending }}</strong>
+            <span>Abiertas actualmente</span>
+          </article>
+          <article class="stats-card">
+            <p>En progreso</p>
+            <strong>{{ stats_view.cards.in_progress }}</strong>
+            <span>Con recurrencia activa</span>
+          </article>
+          <article class="stats-card">
+            <p>Racha actual</p>
+            <strong>{{ stats_view.cards.streak }}</strong>
+            <span>días consecutivos</span>
+          </article>
+        </section>
+
+        <section class="stats-insights">
+          <article class="stats-insight-card">
+            <p class="insight-label">Mejor día</p>
+            <strong>{{ stats_view.insights.best_day_label }}</strong>
+            <span>{{ stats_view.insights.best_day_value }} tareas completadas</span>
+          </article>
+          <article class="stats-insight-card">
+            <p class="insight-label">Tendencia</p>
+            <strong>{{ stats_view.insights.trend_label }}</strong>
+            <span>
+              {% if stats_view.insights.trend_delta > 0 %}+{% endif %}{{ stats_view.insights.trend_delta }}%
+              · {{ stats_view.insights.trend_period_label }}
+            </span>
+          </article>
+          <article class="stats-insight-card">
+            <p class="insight-label">Tiempo promedio</p>
+            <strong>
+              {% if stats_view.cards.avg_cycle_days is not none %}
+                {{ stats_view.cards.avg_cycle_days }} días
+              {% else %}
+                Sin datos
+              {% endif %}
+            </strong>
+            <span>Ciclo creación → cierre</span>
+          </article>
+        </section>
+
+        <section class="stats-charts premium">
+          <article class="stats-chart-card wide">
+            <h3>Tendencia de completadas</h3>
+            <canvas id="stats-completed-trend" height="130"></canvas>
+          </article>
+          <article class="stats-chart-card">
+            <h3>Tareas por prioridad</h3>
+            <div id="stats-priority-legend" class="stats-priority-legend" aria-label="Leyenda por prioridad"></div>
+            <canvas id="stats-priority-chart" height="130"></canvas>
+          </article>
+          <article class="stats-chart-card">
+            <h3>Creadas vs completadas</h3>
+            <canvas id="stats-created-completed" height="130"></canvas>
+          </article>
+          <article class="stats-chart-card">
+            <h3>Rendimiento semanal</h3>
+            <canvas id="stats-weekly-performance" height="130"></canvas>
+          </article>
+        </section>
+
+        <section class="stats-extra premium">
+          <article class="stats-info-card">
+            <h3>Notas</h3>
+            <p>Completadas: {{ stats_view.notes.completed }} · Pendientes: {{ stats_view.notes.pending }}</p>
+          </article>
+          <article class="stats-info-card">
+            <h3>Por Prioridad</h3>
+            {% set p_total = stats_view.priority.alta + stats_view.priority.media + stats_view.priority.baja %}
+            {% for label, value, key in [('Alta', stats_view.priority.alta, 'alta'), ('Media', stats_view.priority.media, 'media'), ('Baja', stats_view.priority.baja, 'baja')] %}
+              {% set pct = ((value * 100 / p_total) if p_total else 0) %}
+              <div class="stats-priority-row">
+                <span>{{ label }}</span>
+                <div class="stats-priority-bar"><i class="stats-priority-fill {{ key }}" data-width="{{ '%.2f'|format(pct) }}"></i></div>
+                <strong>{{ value }}</strong>
+              </div>
+            {% endfor %}
+          </article>
+          <article class="stats-info-card">
+            <h3>Por Categoría</h3>
+            {% if stats_view.categories %}
+              {% set cat_total = stats_view.cards.total if stats_view.cards.total else 0 %}
+              <ul class="stats-category-bars">
+                {% for category in stats_view.categories[:5] %}
+                  {% set cat_pct = ((category.total * 100 / cat_total) if cat_total else 0) %}
+                  <li>
+                    <div class="stats-category-meta">
+                      <span>{{ category.name }}</span>
+                      <strong>{{ category.total }}</strong>
+                    </div>
+                    <div class="stats-category-track">
+                      <i class="stats-category-fill" data-width="{{ '%.2f'|format(cat_pct) }}"></i>
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p>Sin categorías aún.</p>
+            {% endif %}
+          </article>
+        </section>
+        <script id="stats-chart-data" type="application/json">{{ stats_view.charts | tojson }}</script>
+      </section>
+      {% endif %}
+
+      {% if current_nav == 'tasks' %}
+      <section class="tasks-section ui-block">
+      {% include "_tasks_list.html" %}
+      </section>
+      {% endif %}
+        </section>
+      </div>
+    </main>
+  </div>
+  {% if current_nav == 'stats' %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  {% endif %}
+  <button id="scroll-top-btn" class="scroll-top-btn" type="button" aria-label="Volver arriba">↑</button>
+  <script>
+    (() => {
+      const SCROLL_STATE_KEY = "todo-scroll-state";
+      const toggle = document.getElementById("theme-toggle");
+      const headerModeSelect = document.getElementById("header-mode-select");
+      const refreshViewBtn = document.getElementById("refresh-view-btn");
+      const scrollTopBtn = document.getElementById("scroll-top-btn");
+      const getTheme = () => document.documentElement.getAttribute("data-theme") || "dark";
+      const getHeaderMode = () => document.documentElement.getAttribute("data-header-mode") || "sticky";
+
+      function getActionTargetSelector(node) {
+        if (!node) return "";
+        const taskItem = node.closest("li[data-task-id]");
+        if (taskItem && taskItem.dataset.taskId) {
+          return `li[data-task-id="${taskItem.dataset.taskId}"]`;
+        }
+        const calendarDay = node.closest(".calendar-day[data-date]");
+        if (calendarDay && calendarDay.dataset.date) {
+          return `.calendar-day[data-date="${calendarDay.dataset.date}"]`;
+        }
+        return "";
+      }
+
+      function persistScrollState(targetSelector = "") {
+        const payload = {
+          y: window.scrollY || 0,
+          target: targetSelector || "",
+          ts: Date.now(),
+        };
+        sessionStorage.setItem(SCROLL_STATE_KEY, JSON.stringify(payload));
+      }
+
+      function restoreScrollState() {
+        const raw = sessionStorage.getItem(SCROLL_STATE_KEY);
+        if (!raw) return;
+        sessionStorage.removeItem(SCROLL_STATE_KEY);
+        let state = null;
+        try {
+          state = JSON.parse(raw);
+        } catch {
+          state = null;
+        }
+        if (!state || typeof state.y !== "number") return;
+
+        const restore = () => {
+          window.scrollTo({ top: state.y, behavior: "auto" });
+          if (state.target) {
+            const target = document.querySelector(state.target);
+            if (target) {
+              target.classList.remove("action-highlight");
+              requestAnimationFrame(() => target.classList.add("action-highlight"));
+              setTimeout(() => target.classList.remove("action-highlight"), 1200);
+            }
+          }
+        };
+        requestAnimationFrame(() => {
+          requestAnimationFrame(restore);
+        });
+      }
+
+      restoreScrollState();
+
+      function applyDynamicDashboardStyles() {
+        const progressNodes = Array.from(document.querySelectorAll(".progress-ring[data-progress]"));
+        progressNodes.forEach((node) => {
+          const raw = node.getAttribute("data-progress") || "0";
+          const value = Number.parseFloat(raw);
+          if (Number.isFinite(value)) {
+            const clamped = Math.max(0, Math.min(100, value));
+            node.style.setProperty("--progress", String(clamped));
+          } else {
+            node.style.setProperty("--progress", "0");
+          }
+        });
+
+        const priorityFills = Array.from(document.querySelectorAll(".priority-fill[data-width]"));
+        priorityFills.forEach((node) => {
+          const raw = node.getAttribute("data-width") || "0";
+          const value = Number.parseFloat(raw);
+          if (Number.isFinite(value)) {
+            const clamped = Math.max(0, Math.min(100, value));
+            node.style.width = `${clamped}%`;
+          } else {
+            node.style.width = "0%";
+          }
+        });
+
+        const statsFills = Array.from(
+          document.querySelectorAll(".stats-priority-fill[data-width], .stats-category-fill[data-width]")
+        );
+        statsFills.forEach((node) => {
+          const raw = node.getAttribute("data-width") || "0";
+          const value = Number.parseFloat(raw);
+          if (Number.isFinite(value)) {
+            const clamped = Math.max(0, Math.min(100, value));
+            node.style.width = `${clamped}%`;
+          } else {
+            node.style.width = "0%";
+          }
+        });
+      }
+
+      applyDynamicDashboardStyles();
+
+      const autoDismissCategoryMessages = Array.from(
+        document.querySelectorAll(".category-message[data-auto-dismiss='true']")
+      );
+      autoDismissCategoryMessages.forEach((node) => {
+        window.setTimeout(() => {
+          node.classList.add("fade-out");
+          window.setTimeout(() => {
+            node.remove();
+          }, 260);
+        }, 3000);
+      });
+
+      const LABEL_TOAST_KEY = "todo-labels-toast";
+      const labelsView = document.querySelector(".labels-view");
+      const labelsToast = document.getElementById("labels-toast");
+      const labelDeleteModal = document.getElementById("label-delete-modal");
+      const labelDeleteMessage = document.getElementById("label-delete-message");
+      const labelDeleteCancel = document.getElementById("label-delete-cancel");
+      const labelDeleteConfirm = document.getElementById("label-delete-confirm");
+      const labelCreateColorInput = document.getElementById("label-create-color");
+      const labelCreateColorPreview = document.getElementById("label-create-color-preview");
+      let pendingLabelDeleteForm = null;
+
+      function showLabelsToast(message, type = "ok") {
+        if (!labelsToast || !message) return;
+        labelsToast.textContent = message;
+        labelsToast.hidden = false;
+        labelsToast.classList.remove("ok", "error", "fade-out");
+        labelsToast.classList.add(type === "error" ? "error" : "ok");
+        window.setTimeout(() => {
+          labelsToast.classList.add("fade-out");
+          window.setTimeout(() => {
+            labelsToast.hidden = true;
+            labelsToast.classList.remove("fade-out");
+          }, 220);
+        }, 2800);
+      }
+
+      function closeLabelDeleteModal() {
+        if (!labelDeleteModal) return;
+        labelDeleteModal.classList.remove("open");
+        labelDeleteModal.setAttribute("aria-hidden", "true");
+        pendingLabelDeleteForm = null;
+      }
+
+      function openLabelDeleteModal(tagName, form) {
+        if (!labelDeleteModal || !labelDeleteMessage || !form) return;
+        labelDeleteMessage.textContent = `¿Eliminar etiqueta "${tagName}"? Esta acción no se puede deshacer.`;
+        pendingLabelDeleteForm = form;
+        labelDeleteModal.classList.add("open");
+        labelDeleteModal.setAttribute("aria-hidden", "false");
+      }
+
+      if (labelsView) {
+        const storedToastRaw = sessionStorage.getItem(LABEL_TOAST_KEY);
+        if (storedToastRaw) {
+          sessionStorage.removeItem(LABEL_TOAST_KEY);
+          try {
+            const storedToast = JSON.parse(storedToastRaw);
+            if (storedToast && storedToast.message) {
+              showLabelsToast(storedToast.message, storedToast.type || "ok");
+            }
+          } catch {
+            // no-op
+          }
+        }
+
+        if (labelCreateColorInput && labelCreateColorPreview) {
+          const syncColorPreview = () => {
+            const color = labelCreateColorInput.value || "#22c55e";
+            labelCreateColorPreview.style.setProperty("--tag-color", color);
+          };
+          syncColorPreview();
+          labelCreateColorInput.addEventListener("input", syncColorPreview);
+        }
+
+        labelsView.addEventListener("click", (event) => {
+          if (!(event.target instanceof Element)) return;
+          const editTrigger = event.target.closest(".label-edit-trigger");
+          if (editTrigger) {
+            const item = editTrigger.closest("[data-label-item]");
+            if (!item) return;
+            const editForm = item.querySelector(".label-edit-form");
+            const textInput = editForm.querySelector("input[name='tag_name']");
+            if (!editForm || !(textInput instanceof HTMLInputElement)) return;
+            const currentName = textInput.value.trim();
+            const newName = window.prompt("Editar etiqueta", currentName);
+            if (newName === null) return;
+            const normalized = newName.trim();
+            if (!normalized) {
+              showLabelsToast("Nombre de etiqueta requerido", "error");
+              return;
+            }
+            textInput.value = normalized;
+            sessionStorage.setItem(
+              LABEL_TOAST_KEY,
+              JSON.stringify({ type: "ok", message: "Etiqueta guardada correctamente" })
+            );
+            editForm.submit();
+            return;
+          }
+
+          const deleteTrigger = event.target.closest(".label-delete-trigger");
+          if (deleteTrigger) {
+            const item = deleteTrigger.closest("[data-label-item]");
+            const deleteForm = item ? item.querySelector(".label-delete-form") : null;
+            if (!item || !deleteForm) return;
+            const tagName = item.getAttribute("data-label-name") || "esta etiqueta";
+            openLabelDeleteModal(tagName, deleteForm);
+            return;
+          }
+        });
+
+        labelsView.addEventListener("submit", (event) => {
+          const form = event.target;
+          if (!(form instanceof HTMLFormElement)) return;
+          if (form.classList.contains("js-label-create-form")) {
+            const nameInput = form.querySelector("input[name='tag_name']");
+            const tagName = nameInput instanceof HTMLInputElement ? nameInput.value.trim() : "";
+            sessionStorage.setItem(
+              LABEL_TOAST_KEY,
+              JSON.stringify({
+                type: tagName ? "ok" : "error",
+                message: tagName ? "Etiqueta guardada correctamente" : "Nombre de etiqueta requerido",
+              })
+            );
+            return;
+          }
+          if (form.classList.contains("label-edit-form")) {
+            const nameInput = form.querySelector("input[name='tag_name']");
+            const tagName = nameInput instanceof HTMLInputElement ? nameInput.value.trim() : "";
+            if (!tagName) {
+              sessionStorage.setItem(
+                LABEL_TOAST_KEY,
+                JSON.stringify({ type: "error", message: "Nombre de etiqueta requerido" })
+              );
+            }
+          }
+        });
+      }
+
+      if (labelDeleteCancel) {
+        labelDeleteCancel.addEventListener("click", closeLabelDeleteModal);
+      }
+
+      if (labelDeleteConfirm) {
+        labelDeleteConfirm.addEventListener("click", () => {
+          if (!pendingLabelDeleteForm) {
+            closeLabelDeleteModal();
+            return;
+          }
+          sessionStorage.setItem(
+            LABEL_TOAST_KEY,
+            JSON.stringify({ type: "error", message: "Etiqueta eliminada" })
+          );
+          pendingLabelDeleteForm.submit();
+        });
+      }
+
+      if (labelDeleteModal) {
+        labelDeleteModal.addEventListener("click", (event) => {
+          if (event.target === labelDeleteModal) {
+            closeLabelDeleteModal();
+          }
+        });
+      }
+
+      function updateThemeUI() {
+        if (!toggle) return;
+        const theme = getTheme();
+        const isLight = theme === "light";
+        toggle.classList.toggle("is-light", isLight);
+        toggle.setAttribute("aria-checked", isLight ? "true" : "false");
+      }
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem("todo-theme", theme);
+        updateThemeUI();
+      }
+
+      if (toggle) {
+        updateThemeUI();
+        toggle.addEventListener("click", () => {
+          const current = getTheme();
+          applyTheme(current === "dark" ? "light" : "dark");
+        });
+      }
+
+      function applyHeaderMode(mode) {
+        const value = mode === "normal" ? "normal" : "sticky";
+        document.documentElement.setAttribute("data-header-mode", value);
+        localStorage.setItem("todo-header-mode", value);
+        if (headerModeSelect) {
+          headerModeSelect.value = value;
+        }
+      }
+
+      if (headerModeSelect) {
+        headerModeSelect.value = getHeaderMode();
+        headerModeSelect.addEventListener("change", () => {
+          applyHeaderMode(headerModeSelect.value);
+        });
+      }
+
+      if (scrollTopBtn) {
+        const updateScrollButton = () => {
+          if (window.scrollY > 260) {
+            scrollTopBtn.classList.add("visible");
+          } else {
+            scrollTopBtn.classList.remove("visible");
+          }
+        };
+
+        updateScrollButton();
+        window.addEventListener("scroll", updateScrollButton, { passive: true });
+        scrollTopBtn.addEventListener("click", () => {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      }
+
+      if (refreshViewBtn) {
+        refreshViewBtn.addEventListener("click", () => {
+          window.location.reload();
+        });
+      }
+
+      let tasksContainer = document.getElementById("tasks-fragment");
+      const feedbackForms = Array.from(document.querySelectorAll(".feedback-form"));
+      const feedbackLinks = Array.from(document.querySelectorAll(".feedback-link"));
+
+      feedbackForms.forEach((form) => {
+        form.addEventListener("submit", () => {
+          persistScrollState(getActionTargetSelector(form));
+          const block =
+            form.closest(".ui-block") ||
+            form.closest("li[data-task-id]") ||
+            form.closest(".card");
+          if (block) {
+            block.classList.remove("feedback-flash");
+            requestAnimationFrame(() => block.classList.add("feedback-flash"));
+            setTimeout(() => block.classList.remove("feedback-flash"), 650);
+          }
+          const submitBtn = form.querySelector("button[type='submit']");
+          if (submitBtn) {
+            submitBtn.classList.add("feedback-press");
+            setTimeout(() => submitBtn.classList.remove("feedback-press"), 260);
+          }
+        });
+      });
+
+      feedbackLinks.forEach((link) => {
+        link.addEventListener("click", () => {
+          persistScrollState(getActionTargetSelector(link));
+          link.classList.add("feedback-press");
+          setTimeout(() => link.classList.remove("feedback-press"), 260);
+        });
+      });
+
+      document.addEventListener(
+        "submit",
+        (event) => {
+          const form = event.target;
+          if (!(form instanceof HTMLFormElement)) return;
+          persistScrollState(getActionTargetSelector(form));
+        },
+        true
+      );
+
+      document.addEventListener(
+        "click",
+        (event) => {
+          const link = event.target.closest("a[href]");
+          if (!link) return;
+          const href = link.getAttribute("href");
+          if (!href || href.startsWith("#")) return;
+          persistScrollState(getActionTargetSelector(link));
+        },
+        true
+      );
+
+      function focusTaskById(taskId) {
+        if (!taskId) return;
+        const target = document.querySelector(`li[data-task-id="${taskId}"]`);
+        if (!target) return;
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.remove("action-highlight");
+        requestAnimationFrame(() => target.classList.add("action-highlight"));
+        setTimeout(() => target.classList.remove("action-highlight"), 1300);
+      }
+
+      function initTaskListDnd() {
+        const list = document.getElementById("task-list");
+        if (!list || list.dataset.dragEnabled !== "true" || list.dataset.dndBound === "true") return;
+        list.dataset.dndBound = "true";
+        const getTaskItems = () =>
+          Array.from(list.querySelectorAll("li[data-task-id]"));
+
+        let dragged = null;
+
+        function moveBefore(target, source) {
+          const all = getTaskItems();
+          const targetIndex = all.indexOf(target);
+          const sourceIndex = all.indexOf(source);
+          if (targetIndex < 0 || sourceIndex < 0 || target === source) return;
+          if (sourceIndex < targetIndex) {
+            target.after(source);
+          } else {
+            target.before(source);
+          }
+        }
+
+        function saveOrder() {
+          const orderedIds = getTaskItems().map((item) => Number(item.dataset.taskId));
+          fetch("{{ url_for('reorder_tasks') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ordered_ids: orderedIds }),
+          }).catch(() => {});
+        }
+
+        list.addEventListener("dragstart", (event) => {
+          const item = event.target.closest("li[data-task-id]");
+          if (!item) return;
+          dragged = item;
+          item.classList.add("dragging");
+        });
+
+        list.addEventListener("dragend", () => {
+          if (dragged) {
+            dragged.classList.remove("dragging");
+          }
+          dragged = null;
+          saveOrder();
+        });
+
+        list.addEventListener("dragover", (event) => {
+          event.preventDefault();
+          const target = event.target.closest("li[data-task-id]");
+          if (!target || !dragged) return;
+          moveBefore(target, dragged);
+        });
+      }
+
+      async function refreshTasksFragment(preferredTaskId = null, sourceForm = null) {
+        tasksContainer = document.getElementById("tasks-fragment");
+        if (!tasksContainer) return;
+        const params = new URLSearchParams(window.location.search);
+        if (sourceForm instanceof HTMLFormElement) {
+          const sourceData = new FormData(sourceForm);
+          ["filter", "q", "date_q", "quick_date", "sort", "nav", "edit", "dashboard_from", "dashboard_to"].forEach((key) => {
+            if (sourceData.has(key)) {
+              params.set(key, String(sourceData.get(key) || ""));
+            }
+          });
+        }
+        if (!params.get("nav")) params.set("nav", "{{ current_nav }}");
+        const response = await fetch(`{{ url_for('partial_tasks') }}?${params.toString()}`, {
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
+        if (!response.ok) throw new Error("No se pudo actualizar tareas");
+        const html = await response.text();
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = html.trim();
+        const nextFragment = wrapper.firstElementChild;
+        if (!nextFragment) throw new Error("Fragmento inválido");
+        tasksContainer.replaceWith(nextFragment);
+        tasksContainer = nextFragment;
+        initTaskListDnd();
+        if (preferredTaskId) focusTaskById(preferredTaskId);
+      }
+
+      initTaskListDnd();
+
+      const calendarEvents = Array.from(document.querySelectorAll(".calendar-event[data-task-id]"));
+      const calendarDays = Array.from(document.querySelectorAll(".calendar-day[data-date]"));
+      const calendarTaskDetailsNode = document.getElementById("calendar-task-details");
+      const calendarTaskModal = document.getElementById("calendar-task-modal");
+      const calendarTaskClose = document.getElementById("calendar-task-close");
+      const calendarTaskTitle = document.getElementById("calendar-task-title");
+      const calendarTaskCategory = document.getElementById("calendar-task-category");
+      const calendarTaskPriority = document.getElementById("calendar-task-priority");
+      const calendarTaskDate = document.getElementById("calendar-task-date");
+      const calendarTaskNote = document.getElementById("calendar-task-note");
+      const calendarTaskNotesList = document.getElementById("calendar-task-notes-list");
+      const calendarTaskDetails = (() => {
+        if (!calendarTaskDetailsNode) return {};
+        try {
+          return JSON.parse(calendarTaskDetailsNode.textContent || "{}");
+        } catch {
+          return {};
+        }
+      })();
+      let draggingCalendarTaskId = null;
+      let lastCalendarDragAt = 0;
+
+      function openCalendarTaskModal(taskId) {
+        if (!calendarTaskModal) return;
+        const detail = calendarTaskDetails[String(taskId)];
+        if (!detail) return;
+
+        calendarTaskTitle.textContent = detail.text || "Tarea";
+        calendarTaskCategory.textContent = detail.category || "Sin categoría";
+        calendarTaskPriority.textContent = (detail.priority || "-").toUpperCase();
+        calendarTaskDate.textContent = detail.due_date || "-";
+        calendarTaskNote.textContent = detail.notes || "Sin nota";
+        calendarTaskNotesList.innerHTML = "";
+        const notesItems = Array.isArray(detail.notes_items) ? detail.notes_items : (Array.isArray(detail.subtasks) ? detail.subtasks : []);
+        if (!notesItems.length) {
+          const li = document.createElement("li");
+          li.textContent = "Sin notas.";
+          calendarTaskNotesList.appendChild(li);
+        } else {
+          notesItems.forEach((note) => {
+            const li = document.createElement("li");
+            li.textContent = `${note.completed ? "✓" : "○"} ${note.text}`;
+            calendarTaskNotesList.appendChild(li);
+          });
+        }
+
+        calendarTaskModal.classList.add("open");
+        calendarTaskModal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeCalendarTaskModal() {
+        if (!calendarTaskModal) return;
+        calendarTaskModal.classList.remove("open");
+        calendarTaskModal.setAttribute("aria-hidden", "true");
+      }
+
+      if (calendarTaskClose) {
+        calendarTaskClose.addEventListener("click", closeCalendarTaskModal);
+      }
+
+      if (calendarTaskModal) {
+        calendarTaskModal.addEventListener("click", (event) => {
+          if (event.target === calendarTaskModal) {
+            closeCalendarTaskModal();
+          }
+        });
+      }
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeCalendarTaskModal();
+          closeLabelDeleteModal();
+        }
+      });
+
+      calendarEvents.forEach((eventCard) => {
+        eventCard.addEventListener("dragstart", () => {
+          draggingCalendarTaskId = Number(eventCard.dataset.taskId);
+          eventCard.classList.add("dragging");
+        });
+        eventCard.addEventListener("dragend", () => {
+          draggingCalendarTaskId = null;
+          eventCard.classList.remove("dragging");
+          lastCalendarDragAt = Date.now();
+          calendarDays.forEach((day) => day.classList.remove("drop-target"));
+        });
+
+        eventCard.addEventListener("click", () => {
+          if (Date.now() - lastCalendarDragAt < 220) return;
+          const taskId = Number(eventCard.dataset.taskId);
+          openCalendarTaskModal(taskId);
+        });
+
+        eventCard.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          const taskId = Number(eventCard.dataset.taskId);
+          openCalendarTaskModal(taskId);
+        });
+      });
+
+      calendarDays.forEach((day) => {
+        day.addEventListener("dragover", (event) => {
+          if (!draggingCalendarTaskId) return;
+          event.preventDefault();
+          day.classList.add("drop-target");
+        });
+
+        day.addEventListener("dragleave", () => {
+          day.classList.remove("drop-target");
+        });
+
+        day.addEventListener("drop", async (event) => {
+          if (!draggingCalendarTaskId) return;
+          event.preventDefault();
+          const newDate = day.dataset.date;
+          day.classList.remove("drop-target");
+          try {
+            const response = await fetch("{{ url_for('move_calendar_task') }}", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                task_id: draggingCalendarTaskId,
+                new_date: newDate,
+              }),
+            });
+            if (response.ok) {
+              persistScrollState(`.calendar-day[data-date="${newDate}"]`);
+              window.location.reload();
+            }
+          } catch (error) {
+            // No-op visual fallback.
+          }
+        });
+      });
+
+      function closeAllDeleteConfirmations(exceptForm = null) {
+        const forms = Array.from(document.querySelectorAll(".delete-task-form"));
+        forms.forEach((currentForm) => {
+          if (exceptForm && currentForm === exceptForm) return;
+          const currentTrigger = currentForm.querySelector(".delete-trigger");
+          const currentBox = currentForm.querySelector(".delete-confirm-box");
+          if (!currentTrigger || !currentBox) return;
+          currentBox.hidden = true;
+          currentTrigger.hidden = false;
+          currentForm.classList.remove("confirming");
+        });
+      }
+
+      closeAllDeleteConfirmations();
+
+      document.addEventListener("click", (event) => {
+        if (!(event.target instanceof Element)) {
+          closeAllDeleteConfirmations();
+          return;
+        }
+        const trigger = event.target.closest(".delete-trigger");
+        if (trigger) {
+          const form = trigger.closest(".delete-task-form");
+          const confirmBox = form ? form.querySelector(".delete-confirm-box") : null;
+          if (!form || !confirmBox) return;
+          closeAllDeleteConfirmations(form);
+          confirmBox.hidden = false;
+          trigger.hidden = true;
+          form.classList.add("confirming");
+          return;
+        }
+        const cancel = event.target.closest(".delete-cancel");
+        if (cancel) {
+          const form = cancel.closest(".delete-task-form");
+          const confirmBox = form ? form.querySelector(".delete-confirm-box") : null;
+          const formTrigger = form ? form.querySelector(".delete-trigger") : null;
+          if (!form || !confirmBox || !formTrigger) return;
+          confirmBox.hidden = true;
+          formTrigger.hidden = false;
+          form.classList.remove("confirming");
+          return;
+        }
+        const insideDeleteForm = event.target.closest(".delete-task-form");
+        if (insideDeleteForm) return;
+        closeAllDeleteConfirmations();
+      });
+
+      function closeAllCategoryDeleteConfirmations(exceptForm = null) {
+        const forms = Array.from(document.querySelectorAll(".category-delete-form"));
+        forms.forEach((currentForm) => {
+          if (exceptForm && currentForm === exceptForm) return;
+          const trigger = currentForm.querySelector(".category-delete-trigger");
+          const confirmBox = currentForm.querySelector(".category-delete-confirm");
+          if (!trigger || !confirmBox) return;
+          confirmBox.hidden = true;
+          trigger.hidden = false;
+          currentForm.classList.remove("confirming");
+        });
+      }
+
+      closeAllCategoryDeleteConfirmations();
+
+      document.addEventListener("click", (event) => {
+        if (!(event.target instanceof Element)) {
+          closeAllCategoryDeleteConfirmations();
+          return;
+        }
+        const trigger = event.target.closest(".category-delete-trigger");
+        if (trigger) {
+          const form = trigger.closest(".category-delete-form");
+          const confirmBox = form ? form.querySelector(".category-delete-confirm") : null;
+          if (!form || !confirmBox) return;
+          closeAllCategoryDeleteConfirmations(form);
+          confirmBox.hidden = false;
+          trigger.hidden = true;
+          form.classList.add("confirming");
+          return;
+        }
+        const cancel = event.target.closest(".category-cancel-btn");
+        if (cancel) {
+          const form = cancel.closest(".category-delete-form");
+          const confirmBox = form ? form.querySelector(".category-delete-confirm") : null;
+          const formTrigger = form ? form.querySelector(".category-delete-trigger") : null;
+          if (!form || !confirmBox || !formTrigger) return;
+          confirmBox.hidden = true;
+          formTrigger.hidden = false;
+          form.classList.remove("confirming");
+          return;
+        }
+        const insideCategoryDelete = event.target.closest(".category-delete-form");
+        if (insideCategoryDelete) return;
+        closeAllCategoryDeleteConfirmations();
+      });
+
+      document.addEventListener("submit", async (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (!form.classList.contains("js-async-action")) return;
+        if (!window.fetch || !tasksContainer) return;
+        event.preventDefault();
+
+        const taskNode = form.closest("li[data-task-id]");
+        const originalTaskId = taskNode ? Number(taskNode.dataset.taskId) : null;
+        const submitter = event.submitter || form.querySelector("button[type='submit']");
+        if (submitter instanceof HTMLButtonElement) submitter.disabled = true;
+        try {
+          const response = await fetch(form.action, {
+            method: form.method || "POST",
+            body: new FormData(form),
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (!response.ok) throw new Error("submit failed");
+
+          let preferredTaskId = originalTaskId;
+          const redirectedUrl = response.url || "";
+          if (redirectedUrl) {
+            const redirected = new URL(redirectedUrl, window.location.origin);
+            const params = redirected.searchParams;
+            if (params.get("new_task_id")) {
+              preferredTaskId = Number(params.get("new_task_id"));
+            }
+            params.delete("new_task_id");
+            const cleanQuery = params.toString();
+            const cleanUrl = cleanQuery ? `${redirected.pathname}?${cleanQuery}` : redirected.pathname;
+            window.history.replaceState({}, "", cleanUrl);
+          }
+          await refreshTasksFragment(preferredTaskId, form);
+          if (form.classList.contains("add-form")) {
+            form.reset();
+          }
+        } catch (error) {
+          form.submit();
+        } finally {
+          if (submitter instanceof HTMLButtonElement) submitter.disabled = false;
+        }
+      }, true);
+
+      const initialNewTaskId = Number("{{ new_task_id or 0 }}");
+      if (initialNewTaskId) {
+        focusTaskById(initialNewTaskId);
+      }
+
+      const pressableTargets = Array.from(
+        document.querySelectorAll("button, .edit, .cancel, .export-link, .sidebar-link, .task-tab")
+      );
+      pressableTargets.forEach((node) => {
+        node.addEventListener("pointerdown", () => {
+          node.classList.add("pressing");
+        });
+        const clearPress = () => node.classList.remove("pressing");
+        node.addEventListener("pointerup", clearPress);
+        node.addEventListener("pointerleave", clearPress);
+        node.addEventListener("pointercancel", clearPress);
+      });
+
+      const statsChartDataNode = document.getElementById("stats-chart-data");
+      if (statsChartDataNode && window.Chart) {
+        let statsData = null;
+        try {
+          statsData = JSON.parse(statsChartDataNode.textContent || "{}");
+        } catch {
+          statsData = null;
+        }
+        if (statsData) {
+          const axisColor = getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() || "#94a3b8";
+          const gridColor = "rgba(148, 163, 184, 0.14)";
+          const donutGlowPlugin = {
+            id: "donutGlowPlugin",
+            afterDatasetsDraw(chart) {
+              const ctx = chart.ctx;
+              const meta = chart.getDatasetMeta(0);
+              if (!meta || !meta.data || !meta.data.length) return;
+              meta.data.forEach((arc, index) => {
+                const dataset = chart.data.datasets[0] || {};
+                const colors = dataset.backgroundColor || [];
+                const color = Array.isArray(colors) ? (colors[index] || "#22c55e") : colors;
+                ctx.save();
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 12;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                arc.draw(ctx);
+                ctx.restore();
+              });
+            },
+          };
+          const donutCenterTextPlugin = {
+            id: "donutCenterTextPlugin",
+            afterDraw(chart, _args, pluginOptions) {
+              const meta = chart.getDatasetMeta(0);
+              if (!meta || !meta.data || !meta.data.length) return;
+              const centerX = meta.data[0].x;
+              const centerY = meta.data[0].y;
+              const centerLabel = pluginOptions?.label || "Tareas";
+              const centerValue = String(pluginOptions?.value ?? "0");
+              const ctx = chart.ctx;
+              ctx.save();
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillStyle = "#e2e8f0";
+              ctx.font = "700 1.35rem Inter, system-ui, sans-serif";
+              ctx.fillText(centerValue, centerX, centerY - 8);
+              ctx.fillStyle = axisColor;
+              ctx.font = "500 0.74rem Inter, system-ui, sans-serif";
+              ctx.fillText(centerLabel, centerX, centerY + 13);
+              ctx.restore();
+            },
+          };
+          const priorityHtmlLegendPlugin = {
+            id: "priorityHtmlLegendPlugin",
+            afterUpdate(chart, _args, pluginOptions) {
+              const containerID = pluginOptions?.containerID;
+              if (!containerID) return;
+              const legendContainer = document.getElementById(containerID);
+              if (!legendContainer) return;
+              legendContainer.innerHTML = "";
+              const labels = chart.data.labels || [];
+              const dataset = chart.data.datasets[0] || {};
+              const data = dataset.data || [];
+              const colors = dataset.backgroundColor || [];
+              const total = data.reduce((acc, val) => acc + Number(val || 0), 0);
+
+              labels.forEach((label, index) => {
+                const value = Number(data[index] || 0);
+                const pct = total > 0 ? (value / total) * 100 : 0;
+                const item = document.createElement("span");
+                item.className = "stats-priority-legend-item";
+
+                const dot = document.createElement("i");
+                dot.className = "stats-priority-legend-dot";
+                const color = Array.isArray(colors) ? (colors[index] || "#4ade80") : colors;
+                dot.style.background = color;
+                dot.style.color = color;
+
+                const text = document.createElement("span");
+                text.className = "stats-priority-legend-text";
+                text.textContent = `${label} ${value} (${pct.toFixed(0)}%)`;
+
+                item.appendChild(dot);
+                item.appendChild(text);
+                legendContainer.appendChild(item);
+              });
+            },
+          };
+          const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: axisColor } } },
+            scales: {
+              x: { ticks: { color: axisColor }, grid: { color: gridColor } },
+              y: { ticks: { color: axisColor }, grid: { color: gridColor }, beginAtZero: true },
+            },
+          };
+
+          const trendCtx = document.getElementById("stats-completed-trend");
+          if (trendCtx) {
+            new Chart(trendCtx, {
+              type: "line",
+              data: {
+                labels: statsData.labels || [],
+                datasets: [{
+                  label: "Completadas",
+                  data: statsData.completed_trend || [],
+                  borderColor: "#22c55e",
+                  backgroundColor: "rgba(34, 197, 94, 0.2)",
+                  tension: 0.32,
+                  fill: true,
+                }],
+              },
+              options: commonOptions,
+            });
+          }
+
+          const priorityCtx = document.getElementById("stats-priority-chart");
+          if (priorityCtx) {
+            const priorityValues = statsData.priority_values || [];
+            const priorityTotal = priorityValues.reduce((acc, value) => acc + Number(value || 0), 0);
+            new Chart(priorityCtx, {
+              type: "doughnut",
+              plugins: [donutGlowPlugin, donutCenterTextPlugin, priorityHtmlLegendPlugin],
+              data: {
+                labels: statsData.priority_labels || [],
+                datasets: [{
+                  data: priorityValues,
+                  backgroundColor: ["#ff5f72", "#ffcc54", "#4ade80"],
+                  borderColor: "rgba(2, 6, 23, 0.96)",
+                  borderWidth: 3,
+                  borderRadius: 8,
+                  spacing: 4,
+                  hoverOffset: 10,
+                }],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: "72%",
+                animation: {
+                  animateRotate: true,
+                  animateScale: true,
+                  duration: 900,
+                  easing: "easeOutCubic",
+                },
+                plugins: {
+                  donutCenterTextPlugin: {
+                    value: priorityTotal,
+                    label: "Tareas",
+                  },
+                  priorityHtmlLegendPlugin: {
+                    containerID: "stats-priority-legend",
+                  },
+                  legend: {
+                    display: false,
+                  },
+                  tooltip: {
+                    backgroundColor: "rgba(8, 15, 35, 0.96)",
+                    borderColor: "rgba(148, 163, 184, 0.35)",
+                    borderWidth: 1,
+                    cornerRadius: 12,
+                    padding: 12,
+                    displayColors: false,
+                    titleColor: "#f8fafc",
+                    bodyColor: "#cbd5e1",
+                    callbacks: {
+                      title(items) {
+                        return items[0]?.label || "";
+                      },
+                      label(context) {
+                        const value = Number(context.parsed || 0);
+                        const total = priorityTotal;
+                        const pct = total > 0 ? (value / total) * 100 : 0;
+                        return `Cantidad: ${value}  (${pct.toFixed(1)}%)`;
+                      },
+                    },
+                  },
+                },
+              },
+            });
+          }
+
+          const createdVsCompletedCtx = document.getElementById("stats-created-completed");
+          if (createdVsCompletedCtx) {
+            const createdData = (statsData.created_vs_completed && statsData.created_vs_completed.created) || [];
+            const completedData = (statsData.created_vs_completed && statsData.created_vs_completed.completed) || [];
+            new Chart(createdVsCompletedCtx, {
+              type: "bar",
+              data: {
+                labels: statsData.labels || [],
+                datasets: [
+                  {
+                    label: "Creadas",
+                    data: createdData,
+                    backgroundColor: "rgba(59, 130, 246, 0.82)",
+                    hoverBackgroundColor: "rgba(96, 165, 250, 0.95)",
+                    borderRadius: 10,
+                    borderSkipped: false,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.58,
+                  },
+                  {
+                    label: "Completadas",
+                    data: completedData,
+                    backgroundColor: "rgba(34, 197, 94, 0.85)",
+                    hoverBackgroundColor: "rgba(74, 222, 128, 1)",
+                    borderRadius: 10,
+                    borderSkipped: false,
+                    barPercentage: 0.62,
+                    categoryPercentage: 0.58,
+                  },
+                ],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                  duration: 850,
+                  easing: "easeOutQuart",
+                },
+                interaction: {
+                  mode: "index",
+                  intersect: false,
+                },
+                plugins: {
+                  legend: {
+                    labels: {
+                      color: axisColor,
+                      usePointStyle: true,
+                      pointStyle: "rectRounded",
+                      boxWidth: 10,
+                      boxHeight: 10,
+                      padding: 14,
+                    },
+                  },
+                  tooltip: {
+                    backgroundColor: "rgba(8, 15, 35, 0.96)",
+                    borderColor: "rgba(148, 163, 184, 0.35)",
+                    borderWidth: 1,
+                    cornerRadius: 12,
+                    padding: 12,
+                    titleColor: "#f8fafc",
+                    bodyColor: "#cbd5e1",
+                    callbacks: {
+                      afterBody(items) {
+                        if (!items || items.length < 2) return "";
+                        const createdPoint = items.find((item) => item.dataset.label === "Creadas");
+                        const completedPoint = items.find((item) => item.dataset.label === "Completadas");
+                        if (!createdPoint || !completedPoint) return "";
+                        const created = Number(createdPoint.raw || 0);
+                        const completed = Number(completedPoint.raw || 0);
+                        const rate = created > 0 ? (completed / created) * 100 : 0;
+                        return `Cumplimiento: ${rate.toFixed(1)}%`;
+                      },
+                    },
+                  },
+                },
+                scales: {
+                  x: {
+                    ticks: { color: axisColor },
+                    grid: { color: "rgba(148, 163, 184, 0.05)" },
+                  },
+                  y: {
+                    beginAtZero: true,
+                    ticks: { color: axisColor },
+                    grid: { color: "rgba(148, 163, 184, 0.08)" },
+                  },
+                },
+              },
+            });
+          }
+
+          const weeklyCtx = document.getElementById("stats-weekly-performance");
+          if (weeklyCtx) {
+            new Chart(weeklyCtx, {
+              type: "bar",
+              data: {
+                labels: statsData.weekly_labels || [],
+                datasets: [{
+                  label: "Completadas",
+                  data: statsData.weekly_completed || [],
+                  backgroundColor: "rgba(139, 92, 246, 0.72)",
+                }],
+              },
+              options: commonOptions,
+            });
+          }
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

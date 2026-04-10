@@ -1,0 +1,219 @@
+<section class="tasks" id="tasks-fragment">
+  {% if current_sort == 'created_desc' %}
+    <p class="drag-hint">Arrastra y suelta tareas para reordenarlas.</p>
+  {% endif %}
+  {% if tasks %}
+    <ul id="task-list" data-drag-enabled="{{ 'true' if current_sort == 'created_desc' and edit_id is none else 'false' }}">
+      {% for task in tasks %}
+        <li
+          class="{{ 'done' if task.completed else '' }} {{ 'newly-created' if new_task_id and task.id == new_task_id else '' }}"
+          data-task-id="{{ task.id }}"
+          draggable="{{ 'true' if current_sort == 'created_desc' and edit_id is none else 'false' }}"
+        >
+          {% if edit_id == task.id %}
+            <form class="edit-form feedback-form js-async-action" action="{{ url_for('edit_task', task_id=task.id) }}" method="post">
+              <label for="edit-{{ task.id }}" class="sr-only">Editar tarea</label>
+              <input id="edit-{{ task.id }}" name="text" type="text" value="{{ task.text }}" required>
+              <label for="edit-notes-{{ task.id }}" class="sr-only">Editar notas</label>
+              <input id="edit-notes-{{ task.id }}" name="notes" type="text" value="{{ task.notes or '' }}" placeholder="Notas (opcional)">
+              <label for="edit-category-{{ task.id }}" class="sr-only">Editar categoría</label>
+              <input id="edit-category-{{ task.id }}" name="category" type="text" value="{{ task.category }}" list="category-options">
+              <label for="edit-project-{{ task.id }}" class="sr-only">Editar proyecto</label>
+              <select id="edit-project-{{ task.id }}" name="project_id">
+                <option value="">Sin proyecto</option>
+                {% for project in project_options %}
+                  <option value="{{ project.id }}" {{ 'selected' if task.project_id == project.id else '' }}>
+                    {{ project.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <label for="edit-tags-{{ task.id }}" class="sr-only">Editar etiquetas</label>
+              <select id="edit-tags-{{ task.id }}" name="tag_ids" multiple>
+                {% for tag in tag_options %}
+                  <option value="{{ tag.id }}" {{ 'selected' if task.tag_ids and tag.id in task.tag_ids else '' }}>
+                    {{ tag.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <label for="edit-priority-{{ task.id }}" class="sr-only">Editar prioridad</label>
+              <select id="edit-priority-{{ task.id }}" name="priority">
+                <option value="baja" {{ 'selected' if task.priority == 'baja' else '' }}>Baja</option>
+                <option value="media" {{ 'selected' if task.priority == 'media' else '' }}>Media</option>
+                <option value="alta" {{ 'selected' if task.priority == 'alta' else '' }}>Alta</option>
+              </select>
+              <label for="edit-recurrence-{{ task.id }}" class="sr-only">Editar recurrencia</label>
+              <select id="edit-recurrence-{{ task.id }}" name="recurrence">
+                <option value="" {{ 'selected' if task.recurrence == '' else '' }}>Sin recurrencia</option>
+                <option value="daily" {{ 'selected' if task.recurrence == 'daily' else '' }}>Diaria</option>
+                <option value="weekly" {{ 'selected' if task.recurrence == 'weekly' else '' }}>Semanal</option>
+                <option value="monthly" {{ 'selected' if task.recurrence == 'monthly' else '' }}>Mensual</option>
+              </select>
+              <label for="edit-due-date-{{ task.id }}" class="sr-only">Editar fecha límite</label>
+              <input id="edit-due-date-{{ task.id }}" name="due_date" type="date" value="{{ task.due_date or '' }}">
+              <input type="hidden" name="filter" value="{{ current_filter }}">
+              <input type="hidden" name="q" value="{{ current_search }}">
+              <input type="hidden" name="date_q" value="{{ current_date_search }}">
+              <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+              <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+              <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+              <input type="hidden" name="sort" value="{{ current_sort }}">
+              <input type="hidden" name="nav" value="{{ current_nav }}">
+              <div class="actions">
+                <button class="save" type="submit">Guardar</button>
+                <a class="cancel" href="{{ url_for('index', nav=current_nav, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Cancelar</a>
+              </div>
+            </form>
+          {% else %}
+            <div class="task-row">
+              <form class="task-check-form js-async-action" action="{{ url_for('toggle_task', task_id=task.id) }}" method="post">
+                <input type="hidden" name="filter" value="{{ current_filter }}">
+                <input type="hidden" name="q" value="{{ current_search }}">
+                <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+                <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+                <button class="task-check {{ 'checked' if task.completed else '' }}" type="submit" aria-label="{{ 'Desmarcar tarea' if task.completed else 'Completar tarea' }}">
+                  {{ '✓' if task.completed else '' }}
+                </button>
+              </form>
+              <div class="task-info">
+                <div class="task-main">
+                  <span class="task-text">{{ task.text }}</span>
+                  <span class="status-badge {{ 'completed' if task.completed else 'progress' if task.recurrence else 'pending' }}">
+                    {{ 'Completada' if task.completed else 'En progreso' if task.recurrence else 'Pendiente' }}
+                  </span>
+                  {% if task.category %}
+                    <span class="category-badge">{{ task.category }}</span>
+                  {% endif %}
+                  {% if task.tags %}
+                    {% for tag in task.tags %}
+                      <span class="task-tag-chip" style="--tag-color: {{ tag.color }};">{{ tag.name }}</span>
+                    {% endfor %}
+                  {% endif %}
+                  <span class="priority-badge priority-{{ task.priority }}">{{ task.priority|capitalize }}</span>
+                  {% if task.recurrence %}
+                    <span class="recurrence-badge">
+                      {{ 'Diaria' if task.recurrence == 'daily' else 'Semanal' if task.recurrence == 'weekly' else 'Mensual' }}
+                    </span>
+                  {% endif %}
+                  {% if task.due_date %}
+                    <span class="due-badge {{ 'overdue' if task.overdue else '' }}">
+                      {{ task.due_date }}
+                      {% if task.overdue %}Vencida{% endif %}
+                    </span>
+                  {% endif %}
+                </div>
+                {% if task.notes %}
+                  <p class="task-notes">Nota: {{ task.notes }}</p>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+
+          <section class="notes-items" aria-label="Notas">
+            <details class="notes-panel" {{ 'open' if task.notes_items else '' }}>
+              <summary>
+                Notas
+                <span>{{ task.notes_items|selectattr('completed')|list|length }}/{{ task.notes_items|length }}</span>
+              </summary>
+              {% if task.notes_items %}
+                <ul class="note-list">
+                  {% for note in task.notes_items %}
+                    <li class="{{ 'done' if note.completed else '' }}">
+                      <span class="note-label">{{ note.text }}</span>
+                      <div class="note-actions">
+                        <form class="js-async-action" action="{{ url_for('toggle_note', note_id=note.id) }}" method="post">
+                          <input type="hidden" name="filter" value="{{ current_filter }}">
+                          <input type="hidden" name="q" value="{{ current_search }}">
+                          <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                          <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                          <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+                          <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+                          <input type="hidden" name="sort" value="{{ current_sort }}">
+                          <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+                          <button class="note-toggle" type="submit" aria-label="{{ 'Desmarcar nota' if note.completed else 'Completar nota' }}">
+                            {{ '↺' if note.completed else '✓' }}
+                          </button>
+                        </form>
+                        <form class="js-async-action" action="{{ url_for('delete_note', note_id=note.id) }}" method="post">
+                          <input type="hidden" name="filter" value="{{ current_filter }}">
+                          <input type="hidden" name="q" value="{{ current_search }}">
+                          <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                          <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                          <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+                          <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+                          <input type="hidden" name="sort" value="{{ current_sort }}">
+                          <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+                          <button class="note-delete" type="submit" aria-label="Eliminar nota">✕</button>
+                        </form>
+                      </div>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+              <form class="note-form js-async-action" action="{{ url_for('add_note', task_id=task.id) }}" method="post">
+                <input type="text" name="note_text" placeholder="Agregar nota..." required>
+                <input type="hidden" name="filter" value="{{ current_filter }}">
+                <input type="hidden" name="q" value="{{ current_search }}">
+                <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+                <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+                <button class="note-add" type="submit">Añadir</button>
+              </form>
+            </details>
+          </section>
+
+          <div class="actions">
+            <a class="edit" href="{{ url_for('index', edit=task.id, nav=current_nav, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Editar</a>
+            <form class="duplicate-task-form js-async-action" action="{{ url_for('duplicate_task', task_id=task.id) }}" method="post">
+              <input type="hidden" name="filter" value="{{ current_filter }}">
+              <input type="hidden" name="q" value="{{ current_search }}">
+              <input type="hidden" name="date_q" value="{{ current_date_search }}">
+              <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+              <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+              <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+              <input type="hidden" name="sort" value="{{ current_sort }}">
+              <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+              <button class="toggle" type="submit">Duplicar</button>
+            </form>
+            <form class="delete-task-form js-async-action" action="{{ url_for('delete_task', task_id=task.id) }}" method="post">
+              <input type="hidden" name="filter" value="{{ current_filter }}">
+              <input type="hidden" name="q" value="{{ current_search }}">
+              <input type="hidden" name="date_q" value="{{ current_date_search }}">
+              <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+              <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
+              <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
+              <input type="hidden" name="sort" value="{{ current_sort }}">
+              <input type="hidden" name="nav" value="{{ current_nav }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
+              <button class="delete delete-trigger" type="button">Eliminar</button>
+              <div class="delete-confirm-box" hidden>
+                <span>¿Eliminar tarea?</span>
+                <button class="delete-confirm" type="submit">Confirmar</button>
+                <button class="delete-cancel" type="button">Cancelar</button>
+              </div>
+            </form>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">No hay tareas aún. Agrega la primera arriba.</p>
+  {% endif %}
+</section>
