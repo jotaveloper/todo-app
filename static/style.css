@@ -568,6 +568,18 @@ html[data-theme="light"] .sidebar-user-email {
   color: #51657f;
 }
 
+html[data-theme="light"] .sidebar-logout-btn {
+  border-color: #ef4444;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+html[data-theme="light"] .sidebar-logout-btn:hover {
+  border-color: #dc2626;
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
 .flash-stack {
   display: grid;
   gap: 8px;
@@ -980,8 +992,9 @@ html[data-theme="light"] .auth-forgot-link {
 
 .header-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .refresh-view-btn {
@@ -1017,8 +1030,12 @@ html[data-theme="light"] .auth-forgot-link {
 }
 
 .header-mode-control {
-  display: grid;
-  gap: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 2px;
+  margin: 0;
   color: var(--text-muted);
   font-size: 0.72rem;
   font-weight: 700;
@@ -1026,9 +1043,14 @@ html[data-theme="light"] .auth-forgot-link {
   letter-spacing: 0.05em;
 }
 
+.header-mode-label {
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .header-mode-control select {
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: 36px;
+  padding: 6px 11px;
   border-radius: 10px;
   font-size: 0.8rem;
 }
@@ -1086,11 +1108,16 @@ html[data-theme="light"] .auth-forgot-link {
   display: flex;
   align-items: center;
   gap: 7px;
+  min-height: 36px;
+  padding: 0 2px;
 }
 
 .theme-icon {
   font-size: 0.82rem;
   opacity: 0.9;
+  width: 14px;
+  text-align: center;
+  line-height: 1;
 }
 
 .theme-switch {
@@ -1646,7 +1673,7 @@ html[data-theme="light"] .note-entry-content {
 
 .add-form {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   margin-top: 2px;
 }
 
@@ -1666,7 +1693,7 @@ html[data-theme="light"] .note-entry-content {
 }
 
 .add-title-field input {
-  min-height: 46px;
+  min-height: 52px;
   font-size: 1rem;
 }
 
@@ -1677,17 +1704,21 @@ html[data-theme="light"] .note-entry-content {
 
 .add-submit-wrap button[type="submit"] {
   min-width: 122px;
+  min-height: 52px;
+  border-radius: 14px;
 }
 
 .add-details-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
+  align-items: start;
 }
 
 .add-field {
   display: grid;
-  gap: 6px;
+  gap: 4px;
+  align-content: start;
 }
 
 .add-field label {
@@ -1695,6 +1726,182 @@ html[data-theme="light"] .note-entry-content {
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.02em;
+}
+
+.add-form .add-field input[type="text"],
+.add-form .add-field input[type="date"],
+.add-form .add-field select {
+  min-height: 52px;
+  border-radius: 14px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in srgb, var(--input-border) 88%, transparent);
+  background: color-mix(in srgb, var(--input-bg) 92%, transparent);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.add-form .add-field input[type="text"]:hover,
+.add-form .add-field input[type="date"]:hover,
+.add-form .add-field select:hover {
+  border-color: color-mix(in srgb, var(--focus-border) 62%, var(--input-border));
+}
+
+.add-form .add-field input[type="text"]:focus,
+.add-form .add-field input[type="date"]:focus,
+.add-form .add-field select:focus {
+  border-color: color-mix(in srgb, #22c55e 72%, var(--focus-border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 24%, transparent);
+}
+
+.add-form .add-field input::placeholder {
+  color: color-mix(in srgb, var(--placeholder) 88%, #cbd5e1 12%);
+}
+
+.tag-select-native {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  margin: 0 !important;
+}
+
+.tag-dropdown {
+  position: relative;
+}
+
+.tag-chip-toggle {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--input-border) 88%, transparent);
+  background: color-mix(in srgb, var(--input-bg) 92%, transparent);
+  color: var(--text-main);
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.tag-chip-toggle:hover {
+  border-color: color-mix(in srgb, var(--focus-border) 62%, var(--input-border));
+  background: color-mix(in srgb, var(--surface-hover) 62%, var(--input-bg));
+}
+
+.tag-chip-caret {
+  color: var(--text-soft);
+  transition: transform 160ms ease;
+}
+
+.tag-dropdown.open .tag-chip-caret {
+  transform: rotate(180deg);
+}
+
+.tag-chip-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--input-border) 88%, transparent);
+  background: color-mix(in srgb, var(--input-bg) 96%, transparent);
+  box-shadow: 0 14px 24px rgba(2, 6, 23, 0.28);
+  padding: 10px;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.tag-dropdown.open .tag-chip-panel {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.tag-chip-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.tag-chip-selector::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tag-chip-selector::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 999px;
+}
+
+.tag-chip-selector::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tag-chip-selector {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--border) 85%, transparent) transparent;
+}
+
+.tag-chip-selector {
+  border-radius: 14px;
+}
+
+.tag-chip-option {
+  --tag-color: #22c55e;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tag-color) 58%, var(--border));
+  background: color-mix(in srgb, var(--tag-color) 16%, var(--surface-item));
+  color: color-mix(in srgb, var(--tag-color) 62%, #ffffff 38%);
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: none;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+
+.tag-chip-option:hover {
+  background: color-mix(in srgb, var(--tag-color) 23%, var(--surface-item));
+  border-color: color-mix(in srgb, var(--tag-color) 72%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tag-color) 16%, transparent);
+  transform: translateY(-1px);
+}
+
+.tag-chip-option.is-active {
+  background: color-mix(in srgb, var(--tag-color) 44%, var(--surface-item));
+  border-color: color-mix(in srgb, var(--tag-color) 88%, var(--border));
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 8px 14px color-mix(in srgb, var(--tag-color) 28%, transparent);
+}
+
+.tag-chip-option:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--tag-color) 24%, transparent),
+    0 8px 14px color-mix(in srgb, var(--tag-color) 24%, transparent);
+}
+
+.tag-chip-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+  line-height: 1.3;
+  display: none;
+}
+
+.add-field-tags {
+  gap: 2px;
 }
 
 .create-section {
@@ -2462,6 +2669,40 @@ html[data-theme="light"] .create-section input,
 html[data-theme="light"] .create-section select,
 html[data-theme="light"] .data-tools input[type="file"] {
   background: #ffffff;
+}
+
+html[data-theme="light"] .add-form .add-field input[type="text"],
+html[data-theme="light"] .add-form .add-field input[type="date"],
+html[data-theme="light"] .add-form .add-field select,
+html[data-theme="light"] .tag-chip-toggle,
+html[data-theme="light"] .tag-chip-panel {
+  border-color: #c7d4e4;
+  background: #ffffff;
+}
+
+html[data-theme="light"] .add-form .add-field input[type="text"]:hover,
+html[data-theme="light"] .add-form .add-field input[type="date"]:hover,
+html[data-theme="light"] .add-form .add-field select:hover,
+html[data-theme="light"] .tag-chip-toggle:hover {
+  border-color: #9fb5cf;
+}
+
+html[data-theme="light"] .add-form .add-field input::placeholder {
+  color: #6b7e96;
+}
+
+html[data-theme="light"] .tag-chip-option {
+  background: color-mix(in srgb, var(--tag-color) 14%, #f8fafc);
+  color: color-mix(in srgb, var(--tag-color) 78%, #1f2937 22%);
+}
+
+html[data-theme="light"] .tag-chip-option:hover {
+  background: color-mix(in srgb, var(--tag-color) 20%, #f1f5f9);
+}
+
+html[data-theme="light"] .tag-chip-option.is-active {
+  background: color-mix(in srgb, var(--tag-color) 70%, #ffffff 30%);
+  color: #ffffff;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
@@ -4125,6 +4366,8 @@ html[data-header-mode="normal"] .card-header {
   .header-controls {
     width: 100%;
     justify-content: space-between;
+    align-items: center;
+    gap: 8px;
   }
 
   .card-header {
