@@ -137,7 +137,7 @@
           <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
           <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
           <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
-          <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+          <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
           <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
           <label for="global_q" class="sr-only">Buscar por categoría</label>
           <input
@@ -261,6 +261,10 @@
                       <span>{{ project.completed_tasks }}/{{ project.total_tasks }} completadas</span>
                       <strong>{{ project.progress_percent }}%</strong>
                     </div>
+                    <div class="project-progress project-progress-sub">
+                      <span>{{ project.pending_tasks }} pendientes</span>
+                      <span>{{ project.overdue_tasks }} vencidas</span>
+                    </div>
                   </a>
                   <form action="{{ url_for('delete_project', project_id=project.id) }}" method="post" onsubmit="return confirm('¿Eliminar proyecto?')">
                     <input type="hidden" name="filter" value="{{ current_filter }}">
@@ -287,6 +291,28 @@
                   </select>
                   <button type="submit">Guardar proyecto</button>
                 </form>
+                <section class="project-metrics-grid" aria-label="Estadísticas del proyecto">
+                  <article class="project-metric">
+                    <p>Total</p>
+                    <strong>{{ selected_project.total_tasks or 0 }}</strong>
+                  </article>
+                  <article class="project-metric">
+                    <p>Completadas</p>
+                    <strong>{{ selected_project.completed_tasks or 0 }}</strong>
+                  </article>
+                  <article class="project-metric">
+                    <p>Pendientes</p>
+                    <strong>{{ selected_project.pending_tasks or 0 }}</strong>
+                  </article>
+                  <article class="project-metric">
+                    <p>Progreso</p>
+                    <strong>{{ selected_project.progress_percent or 0 }}%</strong>
+                  </article>
+                  <article class="project-metric">
+                    <p>Vencidas</p>
+                    <strong>{{ selected_project.overdue_tasks or 0 }}</strong>
+                  </article>
+                </section>
                 <h3>Tareas del proyecto</h3>
                 {% if project_tasks %}
                   <ul class="project-task-list">
@@ -532,7 +558,7 @@
               <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
               <input type="hidden" name="sort" value="{{ current_sort }}">
               <input type="hidden" name="nav" value="{{ current_nav }}">
-              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
               <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
               <button type="submit">Guardar categoría</button>
             </form>
@@ -563,7 +589,7 @@
                         <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
                         <input type="hidden" name="sort" value="{{ current_sort }}">
                         <input type="hidden" name="nav" value="{{ current_nav }}">
-                        <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+                        <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
                         <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
                         <button class="category-delete-trigger" type="button" aria-label="Eliminar categoría {{ category }}">×</button>
                         <div class="category-delete-confirm" hidden>
@@ -705,7 +731,7 @@
           <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
           <input type="hidden" name="sort" value="{{ current_sort }}">
           <input type="hidden" name="nav" value="{{ current_nav }}">
-          <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+          <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
           <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
           <button type="submit">Importar JSON</button>
         </form>
@@ -722,9 +748,11 @@
         <div class="tasks-header">
           <h2>Tareas</h2>
           <nav class="task-tabs" aria-label="Vista de tareas">
-            <a class="task-tab {{ 'active' if current_filter == 'all' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='all', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Todas</a>
-            <a class="task-tab {{ 'active' if current_filter == 'pending' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='pending', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Pendientes</a>
-            <a class="task-tab {{ 'active' if current_filter == 'completed' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='completed', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Completadas</a>
+            <a class="task-tab {{ 'active' if current_filter == 'all' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='all', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Todas <span>{{ dashboard.total }}</span></a>
+            <a class="task-tab {{ 'active' if current_filter == 'pending' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='pending', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Pendientes <span>{{ dashboard.pending }}</span></a>
+            <a class="task-tab {{ 'active' if current_filter == 'completed' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='completed', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Completadas <span>{{ dashboard.completed }}</span></a>
+            <a class="task-tab {{ 'active' if current_filter == 'overdue' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='overdue', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Vencidas <span>{{ date_view.overdue|length }}</span></a>
+            <a class="task-tab {{ 'active' if current_filter == 'upcoming' else '' }} feedback-link" href="{{ url_for('index', nav='tasks', filter='upcoming', q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Próximas <span>{{ date_view.upcoming|length }}</span></a>
           </nav>
         </div>
 
@@ -733,7 +761,7 @@
           <input type="hidden" name="nav" value="{{ current_nav }}">
           <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
           <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
-          <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+          <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
           <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
           <label for="q" class="sr-only">Buscar categoría</label>
           <input id="q" name="q" type="text" placeholder="Buscar categoría..." value="{{ current_search }}">
@@ -759,9 +787,63 @@
               <option value="{{ tag.id }}" {{ 'selected' if selected_tag_id and selected_tag_id == tag.id else '' }}>{{ tag.name }}</option>
             {% endfor %}
           </select>
+          <label for="project_id_filter" class="sr-only">Filtrar por proyecto</label>
+          <select id="project_id_filter" name="project_id">
+            <option value="">Todos los proyectos</option>
+            <option value="none" {{ 'selected' if selected_project_none else '' }}>Sin proyecto</option>
+            {% for project in project_options %}
+              <option value="{{ project.id }}" {{ 'selected' if selected_project_id and selected_project_id == project.id else '' }}>
+                {{ project.name }} ({{ project.total_tasks }})
+              </option>
+            {% endfor %}
+          </select>
           <button type="submit">Aplicar</button>
         </form>
+
+        {% if selected_tag_id %}
+          {% set selected_tag = (tag_options | selectattr('id', 'equalto', selected_tag_id) | list | first) %}
+          {% if selected_tag %}
+          <div class="active-filter-chip-row">
+            <span class="active-filter-chip" style="--tag-color: {{ selected_tag.color }};">
+              Etiqueta: {{ selected_tag.name }}
+            </span>
+            <a class="clear-filter-link" href="{{ url_for('index', nav='tasks', filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value) }}">Quitar etiqueta</a>
+          </div>
+          {% endif %}
+        {% endif %}
       </section>
+
+      <section class="tasks-value-row ui-block" aria-label="Resumen útil de tareas">
+        <article class="task-value-card overdue">
+          <p>Vencidas</p>
+          <strong>{{ reminders.overdue|length }}</strong>
+          <a href="{{ url_for('index', nav='tasks', filter='overdue', q=current_search, date_q=current_date_search, quick_date='', sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Ver tareas vencidas</a>
+        </article>
+        <article class="task-value-card today">
+          <p>Para hoy</p>
+          <strong>{{ reminders.today|length }}</strong>
+          <a href="{{ url_for('index', nav='tasks', filter='today', q=current_search, date_q=current_date_search, quick_date='today', sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Ver hoy</a>
+        </article>
+        <article class="task-value-card upcoming">
+          <p>Próximas {{ reminders.days_ahead }}d</p>
+          <strong>{{ reminders.upcoming|length }}</strong>
+          <a href="{{ url_for('index', nav='tasks', filter='upcoming', q=current_search, date_q=current_date_search, quick_date='week', sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Planificar semana</a>
+        </article>
+      </section>
+
+      {% if project_options %}
+      <section class="project-health-strip ui-block" aria-label="Estado de proyectos">
+        <h3>Estado rápido por proyecto</h3>
+        <div class="project-health-list">
+          {% for project in project_options[:6] %}
+            <a class="project-health-item {{ 'active' if selected_project_id and selected_project_id == project.id else '' }}" href="{{ url_for('index', nav='tasks', filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=project.id, tag_id=selected_tag_id) }}">
+              <span class="project-health-name">{{ project.name }}</span>
+              <span class="project-health-metrics">{{ project.completed_tasks }}/{{ project.total_tasks }} · {{ project.pending_tasks }} pendientes · {{ project.overdue_tasks }} vencidas</span>
+            </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
       {% endif %}
 
       {% if current_nav == 'calendar' %}
@@ -777,6 +859,35 @@
             <a href="{{ url_for('index', nav='calendar', month=calendar_view.next_month, filter=current_filter, q=current_search, date_q=current_date_search, sort=current_sort) }}">Mes siguiente →</a>
           </div>
         </header>
+
+        <section class="calendar-summary-row" aria-label="Resumen del mes">
+          <article class="calendar-summary-card">
+            <p>Total con fecha</p>
+            <strong>{{ calendar_view.summary.total }}</strong>
+          </article>
+          <article class="calendar-summary-card">
+            <p>Pendientes</p>
+            <strong>{{ calendar_view.summary.pending }}</strong>
+          </article>
+          <article class="calendar-summary-card">
+            <p>Vencidas</p>
+            <strong>{{ calendar_view.summary.overdue }}</strong>
+          </article>
+          <article class="calendar-summary-card">
+            <p>Hoy</p>
+            <strong>{{ calendar_view.summary.today }}</strong>
+          </article>
+          <article class="calendar-summary-card">
+            <p>Próximas</p>
+            <strong>{{ calendar_view.summary.upcoming }}</strong>
+          </article>
+        </section>
+
+        <div class="calendar-actions-row">
+          <a href="{{ url_for('index', nav='tasks', filter='today', quick_date='today', q=current_search, date_q=current_date_search, sort=current_sort) }}">Ir a tareas de hoy</a>
+          <a href="{{ url_for('index', nav='tasks', filter='overdue', quick_date='', q=current_search, date_q=current_date_search, sort=current_sort) }}">Resolver vencidas</a>
+          <a href="{{ url_for('index', nav='tasks', filter='upcoming', quick_date='week', q=current_search, date_q=current_date_search, sort=current_sort) }}">Ver próximas</a>
+        </div>
 
         <div class="calendar-grid">
           {% for day_name in calendar_view.weekdays %}

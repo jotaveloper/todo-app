@@ -1666,7 +1666,7 @@ html[data-theme="light"] .note-entry-content {
 
 .search-sort {
   display: grid;
-  grid-template-columns: 1.4fr minmax(170px, 1fr) minmax(170px, 1fr) minmax(160px, 1fr) auto;
+  grid-template-columns: 1.2fr repeat(5, minmax(150px, 1fr)) auto;
   gap: 12px;
   margin-top: 2px;
 }
@@ -2215,6 +2215,13 @@ html[data-theme="light"] .note-entry-content {
   font-size: 0.8rem;
 }
 
+.project-progress-sub {
+  padding-top: 2px;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
 .project-progress strong {
   color: var(--text-main);
 }
@@ -2237,6 +2244,32 @@ html[data-theme="light"] .note-entry-content {
 
 .project-detail h3 {
   margin: 0;
+}
+
+.project-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.project-metric {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-item);
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.project-metric p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.project-metric strong {
+  font-size: 1rem;
+  color: var(--text-main);
 }
 
 .project-task-list {
@@ -2634,7 +2667,7 @@ html[data-theme="light"] .note-entry-content {
 
 .search-sort {
   margin-top: 14px;
-  grid-template-columns: 1.4fr minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr)) auto;
 }
 
 input,
@@ -2792,6 +2825,9 @@ button:active,
   padding: 8px 13px;
   font-size: 0.85rem;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: transform 130ms ease, background 130ms ease, border-color 130ms ease;
 }
 
@@ -2802,6 +2838,142 @@ button:active,
   box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
 }
 
+.task-tab span {
+  font-size: 0.74rem;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-panel) 86%, transparent);
+  color: var(--text-soft);
+}
+
+.task-tab.active span {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--text-main);
+}
+
+.active-filter-chip-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tag-color, #22c55e) 45%, transparent);
+  background: color-mix(in srgb, var(--tag-color, #22c55e) 20%, transparent);
+  color: color-mix(in srgb, var(--tag-color, #22c55e) 72%, #ffffff 28%);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.clear-filter-link {
+  font-size: 0.78rem;
+  color: var(--link);
+  text-decoration: none;
+}
+
+.clear-filter-link:hover {
+  text-decoration: underline;
+}
+
+.tasks-value-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.task-value-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-panel);
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.task-value-card p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.task-value-card strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.task-value-card a {
+  color: var(--link);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.task-value-card a:hover {
+  text-decoration: underline;
+}
+
+.task-value-card.overdue {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.task-value-card.today {
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.task-value-card.upcoming {
+  border-color: rgba(34, 197, 94, 0.42);
+}
+
+.project-health-strip {
+  display: grid;
+  gap: 10px;
+}
+
+.project-health-strip h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.project-health-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.project-health-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 9px 10px;
+  background: var(--surface-panel-alt);
+  text-decoration: none;
+  color: inherit;
+  display: grid;
+  gap: 3px;
+}
+
+.project-health-item.active {
+  border-color: color-mix(in srgb, #22c55e 55%, var(--border));
+  box-shadow: 0 8px 14px rgba(34, 197, 94, 0.12);
+}
+
+.project-health-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.project-health-metrics {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .tasks {
   margin-top: 2px;
 }
@@ -2809,6 +2981,54 @@ button:active,
 .calendar-view {
   display: grid;
   gap: 14px;
+}
+
+.calendar-summary-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendar-summary-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-panel-alt);
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.calendar-summary-card p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.calendar-summary-card strong {
+  font-size: 1.35rem;
+}
+
+.calendar-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.calendar-actions-row a {
+  text-decoration: none;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--surface-panel-alt);
+  border-radius: 999px;
+  padding: 7px 11px;
+}
+
+.calendar-actions-row a:hover {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
 }
 
 .stats-view {
@@ -4289,6 +4509,18 @@ html[data-header-mode="normal"] .card-header {
   .stats-charts,
   .stats-extra {
     grid-template-columns: 1fr;
+  }
+
+  .tasks-value-row {
+    grid-template-columns: 1fr;
+  }
+
+  .project-health-list {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-summary-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .search-sort {

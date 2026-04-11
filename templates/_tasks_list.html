@@ -60,7 +60,7 @@
               <input type="hidden" name="nav" value="{{ current_nav }}">
               <div class="actions">
                 <button class="save" type="submit">Guardar</button>
-                <a class="cancel" href="{{ url_for('index', nav=current_nav, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Cancelar</a>
+                <a class="cancel" href="{{ url_for('index', nav=current_nav, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Cancelar</a>
               </div>
             </form>
           {% else %}
@@ -74,7 +74,7 @@
                 <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
                 <input type="hidden" name="sort" value="{{ current_sort }}">
                 <input type="hidden" name="nav" value="{{ current_nav }}">
-              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
               <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
                 <button class="task-check {{ 'checked' if task.completed else '' }}" type="submit" aria-label="{{ 'Desmarcar tarea' if task.completed else 'Completar tarea' }}">
                   {{ '✓' if task.completed else '' }}
@@ -135,7 +135,7 @@
                           <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
                           <input type="hidden" name="sort" value="{{ current_sort }}">
                           <input type="hidden" name="nav" value="{{ current_nav }}">
-              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
               <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
                           <button class="note-toggle" type="submit" aria-label="{{ 'Desmarcar nota' if note.completed else 'Completar nota' }}">
                             {{ '↺' if note.completed else '✓' }}
@@ -150,7 +150,7 @@
                           <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
                           <input type="hidden" name="sort" value="{{ current_sort }}">
                           <input type="hidden" name="nav" value="{{ current_nav }}">
-              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
               <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
                           <button class="note-delete" type="submit" aria-label="Eliminar nota">✕</button>
                         </form>
@@ -169,7 +169,7 @@
                 <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
                 <input type="hidden" name="sort" value="{{ current_sort }}">
                 <input type="hidden" name="nav" value="{{ current_nav }}">
-              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
               <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
                 <button class="note-add" type="submit">Añadir</button>
               </form>
@@ -177,7 +177,7 @@
           </section>
 
           <div class="actions">
-            <a class="edit" href="{{ url_for('index', edit=task.id, nav=current_nav, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_id, tag_id=selected_tag_id) }}">Editar</a>
+            <a class="edit" href="{{ url_for('index', edit=task.id, nav=current_nav, filter=current_filter, q=current_search, date_q=current_date_search, quick_date=current_quick_date, sort=current_sort, project_id=selected_project_filter_value, tag_id=selected_tag_id) }}">Editar</a>
             <form class="duplicate-task-form js-async-action" action="{{ url_for('duplicate_task', task_id=task.id) }}" method="post">
               <input type="hidden" name="filter" value="{{ current_filter }}">
               <input type="hidden" name="q" value="{{ current_search }}">
@@ -187,7 +187,7 @@
               <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
               <input type="hidden" name="sort" value="{{ current_sort }}">
               <input type="hidden" name="nav" value="{{ current_nav }}">
-              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
               <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
               <button class="toggle" type="submit">Duplicar</button>
             </form>
@@ -200,7 +200,7 @@
               <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
               <input type="hidden" name="sort" value="{{ current_sort }}">
               <input type="hidden" name="nav" value="{{ current_nav }}">
-              <input type="hidden" name="project_id" value="{{ selected_project_id or '' }}">
+              <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
               <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
               <button class="delete delete-trigger" type="button">Eliminar</button>
               <div class="delete-confirm-box" hidden>

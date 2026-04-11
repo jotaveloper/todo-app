@@ -4,10 +4,8 @@ from datetime import date, timedelta
 from datetime import datetime
 import json
 import os
-import re
 from pathlib import Path
 from functools import lru_cache
-from urllib.parse import urljoin, urlparse
 
 from flask import Flask, jsonify, make_response, redirect, render_template, request, url_for, flash
 from flask_login import (
@@ -20,6 +18,20 @@ from flask_login import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 from db import get_connection as get_postgres_connection
+from app.services.auth_utils import (
+    normalize_email,
+    is_valid_email,
+    is_safe_redirect_target as _is_safe_redirect_target,
+)
+from app.services.datetime_utils import (
+    to_bool,
+    to_iso_date,
+    now_iso,
+    relative_time_label,
+    parse_iso_date,
+    add_month,
+    next_due_date,
+)
 try:
     from authlib.integrations.flask_client import OAuth
     OAUTH_IMPORT_ERROR = ""
@@ -48,7 +60,7 @@ GOOGLE_DISCOVERY_URL = os.getenv(
 ).strip()
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "tasks.db"
-VALID_FILTERS = {"all", "pending", "completed"}
+VALID_FILTERS = {"all", "pending", "completed", "overdue", "upcoming", "today"}
 VALID_PRIORITIES = {"baja", "media", "alta"}
 VALID_SORTS = {"created_desc", "created_asc", "priority", "due_date"}
 VALID_QUICK_DATES = {"", "today", "week"}
@@ -77,8 +89,6 @@ TASK_SELECT_FIELDS = (
     "notes",
     "project_id",
 )
-
-EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -111,15 +121,6 @@ def load_user(user_id):
         return None
     return User(user["id"], user["name"], user["email"])
 
-
-def normalize_email(value):
-    return (value or "").strip().lower()
-
-
-def is_valid_email(value):
-    return bool(EMAIL_PATTERN.match(value or ""))
-
-
 def get_user_by_email(email):
     normalized = normalize_email(email)
     if not normalized:
@@ -143,11 +144,7 @@ def get_user_by_google_id(google_id):
 
 
 def is_safe_redirect_target(target):
-    if not target:
-        return False
-    ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, target))
-    return test_url.scheme in {"http", "https"} and ref_url.netloc == test_url.netloc
+    return _is_safe_redirect_target(target, request.host_url)
 
 
 def current_user_id():
@@ -201,25 +198,6 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
-
-def to_bool(value):
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    return str(value).strip().lower() in {"1", "t", "true", "yes", "y"}
-
-
-def to_iso_date(value):
-    if value is None or value == "":
-        return None
-    if isinstance(value, date):
-        return value.isoformat()
-    text = str(value).strip()
-    if not text:
-        return None
-    return text
 
 
 def pg_fetch_all_dicts(query, params=()):
@@ -297,68 +275,6 @@ def pg_task_order_by(sort_value):
     if sort_value == "due_date":
         return "due_date IS NULL ASC, due_date ASC, id DESC"
     return "COALESCE(position, id) DESC, id DESC" if has_position else "id DESC"
-
-
-def now_iso():
-    return datetime.now().isoformat(timespec="seconds")
-
-
-def _parse_datetime_safe(value):
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, date):
-        return datetime.combine(value, datetime.min.time())
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
-def _parse_date_safe(value):
-    if isinstance(value, date):
-        return value
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    try:
-        return date.fromisoformat(raw[:10])
-    except ValueError:
-        return None
-
-
-def relative_time_label(datetime_value):
-    parsed = _parse_datetime_safe(datetime_value)
-    if parsed is None:
-        parsed_date = _parse_date_safe(datetime_value)
-        if parsed_date is None:
-            return "Sin registro"
-        delta_days = (date.today() - parsed_date).days
-        if delta_days <= 0:
-            return "hoy"
-        if delta_days == 1:
-            return "hace 1 día"
-        return f"hace {delta_days} días"
-
-    if parsed.tzinfo is not None:
-        now_dt = datetime.now(parsed.tzinfo)
-    else:
-        now_dt = datetime.now()
-    delta_seconds = int((now_dt - parsed).total_seconds())
-    if delta_seconds < 0:
-        delta_seconds = 0
-    if delta_seconds < 60:
-        return "hace unos segundos"
-    if delta_seconds < 3600:
-        minutes = delta_seconds // 60
-        return f"hace {minutes} min"
-    if delta_seconds < 86400:
-        hours = delta_seconds // 3600
-        return f"hace {hours} hora{'s' if hours != 1 else ''}"
-    days = delta_seconds // 86400
-    return f"hace {days} día{'s' if days != 1 else ''}"
 
 
 def log_event(action_type, task_title, details="", task_id=None, conn=None, user_id=None):
@@ -802,12 +718,32 @@ def get_calendar_view(user_id, month_value):
     notes_map = get_notes_map(task_ids)
     tasks_by_date = {}
     task_details = {}
+    month_summary = {
+        "total": len(rows),
+        "completed": 0,
+        "pending": 0,
+        "overdue": 0,
+        "today": 0,
+        "upcoming": 0,
+    }
     for row in rows:
         due_date = to_iso_date(row.get("due_date"))
+        is_completed = to_bool(row["completed"])
+        if is_completed:
+            month_summary["completed"] += 1
+        else:
+            month_summary["pending"] += 1
+            if due_date:
+                if due_date < today_iso:
+                    month_summary["overdue"] += 1
+                elif due_date == today_iso:
+                    month_summary["today"] += 1
+                else:
+                    month_summary["upcoming"] += 1
         task_item = {
             "id": row["id"],
             "text": row["title"],
-            "completed": to_bool(row["completed"]),
+            "completed": is_completed,
             "priority": row["priority"],
             "category": (row["category"] or "").strip(),
             "due_date": due_date,
@@ -858,7 +794,66 @@ def get_calendar_view(user_id, month_value):
         "weekdays": ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
         "weeks": weeks,
         "task_details": task_details,
+        "summary": month_summary,
     }
+
+
+def build_task_where_clause(
+    owner_id,
+    current_filter,
+    search_query,
+    date_search_query,
+    quick_date,
+    selected_project_id,
+    selected_project_none,
+    selected_tag_id,
+):
+    today_iso = date.today().isoformat()
+    pg_where_parts = ["user_id = %s"]
+    pg_params = [owner_id]
+
+    if current_filter == "pending":
+        pg_where_parts.extend(["completed = %s"])
+        pg_params.append(False)
+    elif current_filter == "completed":
+        pg_where_parts.extend(["completed = %s"])
+        pg_params.append(True)
+    elif current_filter == "overdue":
+        pg_where_parts.extend(["completed = %s", "due_date IS NOT NULL", "due_date < %s"])
+        pg_params.extend([False, today_iso])
+    elif current_filter == "upcoming":
+        pg_where_parts.extend(["completed = %s", "due_date IS NOT NULL", "due_date > %s"])
+        pg_params.extend([False, today_iso])
+    elif current_filter == "today":
+        pg_where_parts.extend(["completed = %s", "due_date = %s"])
+        pg_params.extend([False, today_iso])
+
+    if search_query:
+        pg_where_parts.append("LOWER(category) LIKE LOWER(%s)")
+        pg_params.append(f"%{search_query}%")
+    if date_search_query:
+        pg_where_parts.append("due_date = %s")
+        pg_params.append(date_search_query)
+    if quick_date == "today":
+        pg_where_parts.extend(["completed = %s", "due_date = %s"])
+        pg_params.extend([False, today_iso])
+    elif quick_date == "week":
+        week_end = (date.today() + timedelta(days=6)).isoformat()
+        pg_where_parts.extend(
+            ["completed = %s", "due_date IS NOT NULL AND due_date >= %s AND due_date <= %s"]
+        )
+        pg_params.extend([False, today_iso, week_end])
+    if selected_project_none:
+        pg_where_parts.append("project_id IS NULL")
+    elif selected_project_id is not None:
+        pg_where_parts.append("project_id = %s")
+        pg_params.append(selected_project_id)
+    if selected_tag_id is not None:
+        pg_where_parts.append("id IN (SELECT task_id FROM task_tags WHERE tag_id = %s)")
+        pg_params.append(selected_tag_id)
+
+    pg_where_clause = f"WHERE {' AND '.join(pg_where_parts)}" if pg_where_parts else ""
+    return pg_where_clause, tuple(pg_params)
 
 
 def get_order_by_clause(sort_value):
@@ -900,6 +895,13 @@ def redirect_to_index(
     safe_dashboard_to = (
         dashboard_to_value if dashboard_to_value is not None else get_dashboard_to_value()
     )
+    if project_id_value is None:
+        safe_project_filter = get_selected_project_filter_value()
+    elif isinstance(project_id_value, int):
+        safe_project_filter = str(project_id_value)
+    else:
+        safe_project_filter = (str(project_id_value) or "").strip()
+
     args = {
         "filter": filter_value,
         "q": search_query,
@@ -910,7 +912,7 @@ def redirect_to_index(
         "new_task_id": new_task_id,
         "dashboard_from": safe_dashboard_from,
         "dashboard_to": safe_dashboard_to,
-        "project_id": project_id_value if project_id_value is not None else get_selected_project_id(),
+        "project_id": safe_project_filter,
         "tag_id": tag_id_value if tag_id_value is not None else get_selected_tag_id(),
     }
     if category_status:
@@ -1484,7 +1486,7 @@ def get_date_view(user_id, date_from="", date_to=""):
 def get_reminders(user_id, days_ahead=3, date_from="", date_to=""):
     today = date.today()
     limit = today + timedelta(days=days_ahead)
-    reminders = {"overdue": [], "upcoming": [], "days_ahead": days_ahead}
+    reminders = {"overdue": [], "today": [], "upcoming": [], "days_ahead": days_ahead}
     where_parts = ["user_id = %s", "completed = %s", "due_date IS NOT NULL"]
     where_params = [user_id, False]
     if date_from:
@@ -1512,6 +1514,8 @@ def get_reminders(user_id, days_ahead=3, date_from="", date_to=""):
         item = {"id": row["id"], "text": row["title"], "due_date": due_date}
         if due < today:
             reminders["overdue"].append(item)
+        elif due == today:
+            reminders["today"].append(item)
         elif today <= due <= limit:
             reminders["upcoming"].append(item)
     return reminders
@@ -1541,17 +1545,6 @@ def get_due_date_value():
     try:
         date.fromisoformat(value)
         return value
-    except ValueError:
-        return None
-
-
-def parse_iso_date(value):
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    try:
-        date.fromisoformat(raw)
-        return raw
     except ValueError:
         return None
 
@@ -1588,27 +1581,6 @@ def normalize_project_id(project_id, user_id=None):
         (project_id, owner_id),
     )
     return project_id if row is not None else None
-
-
-def add_month(base_date):
-    year = base_date.year
-    month = base_date.month + 1
-    if month > 12:
-        year += 1
-        month = 1
-    day = min(base_date.day, 28)
-    return date(year, month, day)
-
-
-def next_due_date(current_due, recurrence):
-    base = current_due if current_due else date.today()
-    if recurrence == "daily":
-        return base + timedelta(days=1)
-    if recurrence == "weekly":
-        return base + timedelta(days=7)
-    if recurrence == "monthly":
-        return add_month(base)
-    return None
 
 
 def ensure_category_exists(name, user_id=None):
@@ -1918,21 +1890,28 @@ def get_project_progress_map(user_id=None):
     rows = pg_fetch_all_dicts(
         "SELECT p.id AS project_id, "
         "COUNT(t.id) AS total_tasks, "
-        "SUM(CASE WHEN t.completed = TRUE THEN 1 ELSE 0 END) AS completed_tasks "
+        "SUM(CASE WHEN t.completed = TRUE THEN 1 ELSE 0 END) AS completed_tasks, "
+        "SUM(CASE WHEN t.completed = FALSE THEN 1 ELSE 0 END) AS pending_tasks, "
+        "SUM(CASE WHEN t.completed = FALSE AND t.due_date IS NOT NULL "
+        "AND t.due_date < %s THEN 1 ELSE 0 END) AS overdue_tasks "
         "FROM projects p "
         "LEFT JOIN tasks t ON t.project_id = p.id AND t.user_id = p.user_id "
         "WHERE p.user_id = %s "
         "GROUP BY p.id",
-        (owner_id,),
+        (date.today().isoformat(), owner_id),
     )
     progress_map = {}
     for row in rows:
         total = row["total_tasks"] or 0
         completed = row["completed_tasks"] or 0
+        pending = row["pending_tasks"] or 0
+        overdue = row["overdue_tasks"] or 0
         percent = round((completed / total) * 100, 1) if total else 0.0
         progress_map[row["project_id"]] = {
             "total_tasks": total,
             "completed_tasks": completed,
+            "pending_tasks": pending,
+            "overdue_tasks": overdue,
             "progress_percent": percent,
         }
     return progress_map
@@ -1948,6 +1927,19 @@ def get_selected_project_id():
     except ValueError:
         return None
     return parsed if parsed > 0 else None
+
+
+def get_selected_project_filter_value():
+    raw = (request.args.get("project_id") or request.form.get("project_id") or "").strip()
+    if not raw:
+        return ""
+    if raw.lower() == "none":
+        return "none"
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return ""
+    return str(parsed) if parsed > 0 else ""
 
 
 def get_default_user_id():
@@ -2155,6 +2147,8 @@ def register():
 
         if not name:
             flash("El nombre es obligatorio.", "error")
+        elif not email:
+            flash("El email es obligatorio.", "error")
         elif not is_valid_email(email):
             flash("Ingresa un email válido.", "error")
         elif not password:
@@ -2194,6 +2188,13 @@ def login():
     if request.method == "POST":
         email = normalize_email(request.form.get("email"))
         password = request.form.get("password") or ""
+        if not email:
+            flash("El email es obligatorio.", "error")
+            return render_template("login.html")
+        elif not is_valid_email(email):
+            flash("Ingresa un email válido.", "error")
+            return render_template("login.html")
+
         user_row = get_user_by_email(email)
         if user_row is None:
             flash("No existe una cuenta con ese email.", "error")
@@ -2341,7 +2342,11 @@ def index():
     stats_range_days = get_stats_range_days()
     dashboard_from = get_dashboard_from_value()
     dashboard_to = get_dashboard_to_value()
+    selected_project_filter_value = get_selected_project_filter_value()
+    selected_project_none = selected_project_filter_value == "none"
     selected_project_id = normalize_project_id(get_selected_project_id(), user_id=owner_id)
+    if not selected_project_none and selected_project_filter_value and selected_project_id is None:
+        selected_project_filter_value = ""
     selected_tag_raw = get_selected_tag_id()
     selected_tag_id = None
     if selected_tag_raw is not None:
@@ -2352,39 +2357,19 @@ def index():
     category_status = request.args.get("category_status", "").strip()
     category_message = request.args.get("category_message", "").strip()
     order_clause = pg_task_order_by(current_sort)
-    pg_where_parts = ["user_id = %s"]
-    pg_params = [owner_id]
-    if current_filter == "pending":
-        pg_where_parts.append("completed = %s")
-        pg_params.append(False)
-    elif current_filter == "completed":
-        pg_where_parts.append("completed = %s")
-        pg_params.append(True)
-    if search_query:
-        pg_where_parts.append("LOWER(category) LIKE LOWER(%s)")
-        pg_params.append(f"%{search_query}%")
-    if date_search_query:
-        pg_where_parts.append("due_date = %s")
-        pg_params.append(date_search_query)
-    if quick_date == "today":
-        pg_where_parts.append("due_date = %s")
-        pg_params.append(date.today().isoformat())
-    elif quick_date == "week":
-        week_end = (date.today() + timedelta(days=6)).isoformat()
-        pg_where_parts.append("due_date IS NOT NULL AND due_date >= %s AND due_date <= %s")
-        pg_params.extend([date.today().isoformat(), week_end])
-    if selected_project_id is not None:
-        pg_where_parts.append("project_id = %s")
-        pg_params.append(selected_project_id)
-    if selected_tag_id is not None:
-        pg_where_parts.append(
-            "id IN (SELECT task_id FROM task_tags WHERE tag_id = %s)"
-        )
-        pg_params.append(selected_tag_id)
-    pg_where_clause = f"WHERE {' AND '.join(pg_where_parts)}" if pg_where_parts else ""
+    pg_where_clause, pg_params = build_task_where_clause(
+        owner_id,
+        current_filter,
+        search_query,
+        date_search_query,
+        quick_date,
+        selected_project_id,
+        selected_project_none,
+        selected_tag_id,
+    )
     rows = pg_fetch_all_dicts(
         f"SELECT {pg_task_select_clause()} FROM tasks {pg_where_clause} ORDER BY {order_clause}",
-        tuple(pg_params),
+        pg_params,
     )
     tasks = [build_task(row) for row in rows]
     notes_map = get_notes_map([task["id"] for task in tasks])
@@ -2460,6 +2445,8 @@ def index():
         project_options=project_options,
         user_settings=user_settings,
         selected_project_id=selected_project_id,
+        selected_project_none=selected_project_none,
+        selected_project_filter_value=selected_project_filter_value,
         selected_tag_id=selected_tag_id,
         tag_options=tag_options,
         selected_project=selected_project,
@@ -2483,7 +2470,11 @@ def partial_tasks():
     new_task_id = request.args.get("new_task_id", type=int)
     dashboard_from = get_dashboard_from_value()
     dashboard_to = get_dashboard_to_value()
+    selected_project_filter_value = get_selected_project_filter_value()
+    selected_project_none = selected_project_filter_value == "none"
     selected_project_id = normalize_project_id(get_selected_project_id(), user_id=owner_id)
+    if not selected_project_none and selected_project_filter_value and selected_project_id is None:
+        selected_project_filter_value = ""
     selected_tag_raw = get_selected_tag_id()
     selected_tag_id = None
     if selected_tag_raw is not None:
@@ -2491,40 +2482,20 @@ def partial_tasks():
         selected_tag_id = valid_tags[0] if valid_tags else None
 
     order_clause = pg_task_order_by(current_sort)
-    pg_where_parts = ["user_id = %s"]
-    pg_params = [owner_id]
-    if current_filter == "pending":
-        pg_where_parts.append("completed = %s")
-        pg_params.append(False)
-    elif current_filter == "completed":
-        pg_where_parts.append("completed = %s")
-        pg_params.append(True)
-    if search_query:
-        pg_where_parts.append("LOWER(category) LIKE LOWER(%s)")
-        pg_params.append(f"%{search_query}%")
-    if date_search_query:
-        pg_where_parts.append("due_date = %s")
-        pg_params.append(date_search_query)
-    if quick_date == "today":
-        pg_where_parts.append("due_date = %s")
-        pg_params.append(date.today().isoformat())
-    elif quick_date == "week":
-        week_end = (date.today() + timedelta(days=6)).isoformat()
-        pg_where_parts.append("due_date IS NOT NULL AND due_date >= %s AND due_date <= %s")
-        pg_params.extend([date.today().isoformat(), week_end])
-    if selected_project_id is not None:
-        pg_where_parts.append("project_id = %s")
-        pg_params.append(selected_project_id)
-    if selected_tag_id is not None:
-        pg_where_parts.append(
-            "id IN (SELECT task_id FROM task_tags WHERE tag_id = %s)"
-        )
-        pg_params.append(selected_tag_id)
-    pg_where_clause = f"WHERE {' AND '.join(pg_where_parts)}" if pg_where_parts else ""
+    pg_where_clause, pg_params = build_task_where_clause(
+        owner_id,
+        current_filter,
+        search_query,
+        date_search_query,
+        quick_date,
+        selected_project_id,
+        selected_project_none,
+        selected_tag_id,
+    )
 
     rows = pg_fetch_all_dicts(
         f"SELECT {pg_task_select_clause()} FROM tasks {pg_where_clause} ORDER BY {order_clause}",
-        tuple(pg_params),
+        pg_params,
     )
     tasks = [build_task(row) for row in rows]
     notes_map = get_notes_map([task["id"] for task in tasks])
@@ -2552,6 +2523,8 @@ def partial_tasks():
         dashboard_to=dashboard_to,
         project_options=project_options,
         selected_project_id=selected_project_id,
+        selected_project_none=selected_project_none,
+        selected_project_filter_value=selected_project_filter_value,
         selected_tag_id=selected_tag_id,
         tag_options=tag_options,
     )
