@@ -2185,23 +2185,29 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
 
+    login_failed = False
     if request.method == "POST":
         email = normalize_email(request.form.get("email"))
         password = request.form.get("password") or ""
         if not email:
             flash("El email es obligatorio.", "error")
-            return render_template("login.html")
+            login_failed = True
+            return render_template("login.html", login_failed=login_failed)
         elif not is_valid_email(email):
             flash("Ingresa un email válido.", "error")
-            return render_template("login.html")
+            login_failed = True
+            return render_template("login.html", login_failed=login_failed)
 
         user_row = get_user_by_email(email)
         if user_row is None:
-            flash("No existe una cuenta con ese email.", "error")
+            flash("Correo o contraseña incorrectos.", "error")
+            login_failed = True
         elif user_row.get("auth_provider") != "local" and not user_row.get("password_hash"):
-            flash("Esta cuenta requiere inicio con proveedor externo.", "error")
+            flash("Correo o contraseña incorrectos.", "error")
+            login_failed = True
         elif not check_password_hash(user_row.get("password_hash") or "", password):
-            flash("Contraseña incorrecta.", "error")
+            flash("Correo o contraseña incorrectos.", "error")
+            login_failed = True
         else:
             login_user(User(user_row["id"], user_row["name"], user_row["email"]))
             flash("Inicio de sesión correcto.", "ok")
@@ -2210,7 +2216,7 @@ def login():
                 return redirect(next_target)
             return redirect(url_for("index"))
 
-    return render_template("login.html")
+    return render_template("login.html", login_failed=login_failed)
 
 
 @app.route("/auth/google")
@@ -2322,6 +2328,109 @@ def google_callback():
 def logout():
     logout_user()
     flash("Sesión cerrada correctamente.", "ok")
+    return redirect(url_for("login"))
+
+
+@app.route("/settings/password", methods=["POST"])
+@login_required
+def change_password():
+    owner_id = current_user_id()
+    if owner_id is None:
+        return redirect(url_for("login"))
+
+    current_filter = get_filter_value()
+    search_query = get_search_value()
+    current_sort = get_sort_value()
+
+    current_password = request.form.get("current_password") or ""
+    new_password = request.form.get("new_password") or ""
+    confirm_password = request.form.get("confirm_password") or ""
+
+    user_row = pg_fetch_one_dict(
+        "SELECT id, auth_provider, password_hash FROM users WHERE id = %s",
+        (owner_id,),
+    )
+    if user_row is None:
+        flash("No se encontró la cuenta del usuario.", "error")
+        return redirect_to_index(current_filter, search_query, current_sort, "settings")
+
+    if user_row.get("auth_provider") != "local":
+        flash("Esta cuenta usa Google. El cambio de contraseña local no aplica.", "error")
+        return redirect_to_index(current_filter, search_query, current_sort, "settings")
+
+    if not current_password:
+        flash("Ingresa tu contraseña actual.", "error")
+    elif not check_password_hash(user_row.get("password_hash") or "", current_password):
+        flash("La contraseña actual no es correcta.", "error")
+    elif not new_password:
+        flash("Ingresa una nueva contraseña.", "error")
+    elif len(new_password) < 6:
+        flash("La nueva contraseña debe tener al menos 6 caracteres.", "error")
+    elif new_password != confirm_password:
+        flash("La confirmación de contraseña no coincide.", "error")
+    elif check_password_hash(user_row.get("password_hash") or "", new_password):
+        flash("La nueva contraseña debe ser diferente a la actual.", "error")
+    else:
+        with get_postgres_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET password_hash = %s WHERE id = %s",
+                    (generate_password_hash(new_password), owner_id),
+                )
+            conn.commit()
+        flash("Contraseña actualizada correctamente.", "ok")
+
+    return redirect_to_index(current_filter, search_query, current_sort, "settings")
+
+
+@app.route("/settings/delete-account", methods=["POST"])
+@login_required
+def delete_account():
+    owner_id = current_user_id()
+    if owner_id is None:
+        return redirect(url_for("login"))
+
+    current_filter = get_filter_value()
+    search_query = get_search_value()
+    current_sort = get_sort_value()
+    current_nav = get_nav_value()
+
+    confirmation = (request.form.get("confirm_delete") or "").strip().lower()
+    if confirmation != "yes":
+        flash("Confirma la eliminación de cuenta para continuar.", "error")
+        return redirect_to_index(current_filter, search_query, current_sort, current_nav)
+
+    task_ids = pg_fetch_all_dicts(
+        "SELECT id FROM tasks WHERE user_id = %s",
+        (owner_id,),
+    )
+    task_id_values = [row["id"] for row in task_ids]
+
+    with get_postgres_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM task_tags WHERE task_id IN (SELECT id FROM tasks WHERE user_id = %s)",
+                (owner_id,),
+            )
+            cur.execute("DELETE FROM tasks WHERE user_id = %s", (owner_id,))
+            cur.execute("DELETE FROM projects WHERE user_id = %s", (owner_id,))
+            cur.execute("DELETE FROM tags WHERE user_id = %s", (owner_id,))
+            cur.execute("DELETE FROM users WHERE id = %s", (owner_id,))
+        conn.commit()
+
+    if task_id_values:
+        with get_connection() as sqlite_conn:
+            placeholders = ",".join(["?"] * len(task_id_values))
+            try:
+                sqlite_conn.execute(
+                    f"DELETE FROM subtasks WHERE task_id IN ({placeholders})",
+                    tuple(task_id_values),
+                )
+            except Exception:
+                pass
+
+    logout_user()
+    flash("Tu cuenta fue eliminada correctamente.", "ok")
     return redirect(url_for("login"))
 
 

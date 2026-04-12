@@ -8,8 +8,7 @@
     (() => {
       const savedTheme = localStorage.getItem("todo-theme");
       const savedHeaderMode = localStorage.getItem("todo-header-mode");
-      const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
+      const initialTheme = savedTheme || "light";
       const initialHeaderMode = savedHeaderMode === "normal" ? "normal" : "sticky";
       document.documentElement.setAttribute("data-theme", initialTheme);
       document.documentElement.setAttribute("data-header-mode", initialHeaderMode);
@@ -1120,11 +1119,24 @@
           <article class="settings-panel">
             <h3>Seguridad</h3>
             <div class="settings-actions">
-              <button type="button" class="settings-btn settings-btn-secondary" disabled>Cambiar contraseña</button>
+              {% if user_settings.auth_provider == 'local' %}
+              <form action="{{ url_for('change_password') }}" method="post" class="settings-inline-form settings-password-form">
+                <input type="password" name="current_password" placeholder="Contraseña actual" required>
+                <input type="password" name="new_password" placeholder="Nueva contraseña" required>
+                <input type="password" name="confirm_password" placeholder="Confirmar nueva contraseña" required>
+                <input type="hidden" name="filter" value="{{ current_filter }}">
+                <input type="hidden" name="q" value="{{ current_search }}">
+                <input type="hidden" name="date_q" value="{{ current_date_search }}">
+                <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <button type="submit" class="settings-btn settings-btn-secondary">Cambiar contraseña</button>
+              </form>
+              {% else %}
+              <p class="settings-inline-help">Tu cuenta usa Google. El cambio de contraseña local no aplica.</p>
+              {% endif %}
               <form action="{{ url_for('logout') }}" method="post" class="js-logout-form settings-inline-form">
                 <button type="submit" class="settings-btn settings-btn-primary">Cerrar sesión en esta cuenta</button>
               </form>
-              <button type="button" class="settings-btn settings-btn-secondary" disabled>Cerrar sesión en todos los dispositivos</button>
             </div>
           </article>
 
@@ -1189,12 +1201,18 @@
               </form>
             </div>
           </article>
+        </div>
 
-          <article class="settings-panel danger">
-            <h3>Zona peligrosa</h3>
-            <p>Eliminar tu cuenta borrará permanentemente tu información.</p>
-            <button type="button" class="settings-btn settings-btn-danger" disabled>Eliminar cuenta</button>
-          </article>
+        <div class="settings-delete-row">
+          <form action="{{ url_for('delete_account') }}" method="post" class="settings-inline-form settings-account-delete-form" onsubmit="return confirm('¿Eliminar tu cuenta? Esta acción no se puede deshacer.')">
+            <input type="hidden" name="confirm_delete" value="yes">
+            <input type="hidden" name="filter" value="{{ current_filter }}">
+            <input type="hidden" name="q" value="{{ current_search }}">
+            <input type="hidden" name="date_q" value="{{ current_date_search }}">
+            <input type="hidden" name="quick_date" value="{{ current_quick_date }}">
+            <input type="hidden" name="sort" value="{{ current_sort }}">
+            <button type="submit" class="settings-account-delete-btn">Eliminar cuenta</button>
+          </form>
         </div>
       </section>
       {% endif %}
@@ -1244,7 +1262,7 @@
       const headerModeSelect = document.getElementById("header-mode-select");
       const refreshViewBtn = document.getElementById("refresh-view-btn");
       const scrollTopBtn = document.getElementById("scroll-top-btn");
-      const getTheme = () => document.documentElement.getAttribute("data-theme") || "dark";
+      const getTheme = () => document.documentElement.getAttribute("data-theme") || "light";
       const getHeaderMode = () => document.documentElement.getAttribute("data-header-mode") || "sticky";
       const getUiDensity = () => document.documentElement.getAttribute("data-ui-density") || "normal";
       let pendingLogoutForm = null;
