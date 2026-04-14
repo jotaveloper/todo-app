@@ -28,7 +28,39 @@
                 {% endfor %}
               </select>
               <label for="edit-tags-{{ task.id }}" class="sr-only">Editar etiquetas</label>
-              <select id="edit-tags-{{ task.id }}" name="tag_ids" multiple>
+              <div class="tag-dropdown js-tag-picker" data-tag-picker data-select-id="edit-tags-{{ task.id }}">
+                <button
+                  type="button"
+                  class="tag-chip-toggle"
+                  aria-expanded="false"
+                  aria-controls="edit-tag-chip-panel-{{ task.id }}"
+                >
+                  <span class="tag-chip-summary">Selecciona etiquetas</span>
+                  <span class="tag-chip-caret" aria-hidden="true">▾</span>
+                </button>
+                <div
+                  class="tag-chip-panel"
+                  id="edit-tag-chip-panel-{{ task.id }}"
+                  role="group"
+                  aria-label="Selector de etiquetas"
+                  aria-hidden="true"
+                >
+                  <div class="tag-chip-selector">
+                    {% for tag in tag_options %}
+                      <button
+                        type="button"
+                        class="tag-chip-option {{ 'is-active' if task.tag_ids and tag.id in task.tag_ids else '' }}"
+                        data-tag-id="{{ tag.id }}"
+                        style="--tag-color: {{ tag.color }};"
+                        aria-pressed="{{ 'true' if task.tag_ids and tag.id in task.tag_ids else 'false' }}"
+                      >
+                        {{ tag.name }}
+                      </button>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+              <select id="edit-tags-{{ task.id }}" name="tag_ids" multiple class="tag-select-native" aria-hidden="true" tabindex="-1">
                 {% for tag in tag_options %}
                   <option value="{{ tag.id }}" {{ 'selected' if task.tag_ids and tag.id in task.tag_ids else '' }}>
                     {{ tag.name }}

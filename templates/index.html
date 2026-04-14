@@ -100,7 +100,7 @@
       <div class="global-user-dropdown" id="global-user-dropdown" role="menu" aria-hidden="true">
         <div class="global-user-dropdown-head">
           <strong>{{ current_user.name }}</strong>
-          <span>{{ current_user.email }}</span>
+          <span>{{ user_display_email }}</span>
         </div>
         <a
           class="global-user-dropdown-item"
@@ -642,13 +642,13 @@
                 </div>
                 <div class="add-field add-field-tags">
                   <label for="tag_ids">Etiquetas</label>
-                  <div class="tag-dropdown" id="tag-dropdown">
-                    <button type="button" id="tag-chip-toggle" class="tag-chip-toggle" aria-expanded="false" aria-controls="tag-chip-panel">
-                      <span id="tag-chip-summary">Selecciona etiquetas</span>
+                  <div class="tag-dropdown js-tag-picker" data-tag-picker data-select-id="tag_ids">
+                    <button type="button" class="tag-chip-toggle" aria-expanded="false" aria-controls="tag-chip-panel">
+                      <span class="tag-chip-summary">Selecciona etiquetas</span>
                       <span class="tag-chip-caret" aria-hidden="true">▾</span>
                     </button>
                     <div class="tag-chip-panel" id="tag-chip-panel" role="group" aria-label="Selector de etiquetas" aria-hidden="true">
-                      <div class="tag-chip-selector" id="tag-chip-selector">
+                      <div class="tag-chip-selector">
                         {% for tag in tag_options %}
                           <button
                             type="button"
@@ -761,7 +761,6 @@
           <input type="hidden" name="dashboard_from" value="{{ dashboard_from }}">
           <input type="hidden" name="dashboard_to" value="{{ dashboard_to }}">
           <input type="hidden" name="project_id" value="{{ selected_project_filter_value }}">
-          <input type="hidden" name="tag_id" value="{{ selected_tag_id or '' }}">
           <label for="q" class="sr-only">Buscar categoría</label>
           <input id="q" name="q" type="text" placeholder="Buscar categoría..." value="{{ current_search }}">
           <label for="date_q" class="sr-only">Filtrar por fecha</label>
@@ -1672,62 +1671,65 @@
       initPreferenceToggle(settingsRemindersToggle, REMINDER_PREF_KEY, true);
       initPreferenceToggle(settingsOverdueToggle, OVERDUE_PREF_KEY, true);
 
-      const tagSelect = document.getElementById("tag_ids");
-      const tagChipSelector = document.getElementById("tag-chip-selector");
-      const tagDropdown = document.getElementById("tag-dropdown");
-      const tagChipToggle = document.getElementById("tag-chip-toggle");
-      const tagChipPanel = document.getElementById("tag-chip-panel");
-      const tagChipSummary = document.getElementById("tag-chip-summary");
+      function initTagPicker(dropdown) {
+        if (!(dropdown instanceof HTMLElement)) return;
+        const selectId = dropdown.getAttribute("data-select-id");
+        if (!selectId) return;
+        const tagSelect = document.getElementById(selectId);
+        const tagChipSelector = dropdown.querySelector(".tag-chip-selector");
+        const tagChipToggle = dropdown.querySelector(".tag-chip-toggle");
+        const tagChipPanel = dropdown.querySelector(".tag-chip-panel");
+        const tagChipSummary = dropdown.querySelector(".tag-chip-summary");
+        if (!(tagSelect instanceof HTMLSelectElement) || !tagChipSelector || !tagChipToggle || !tagChipPanel) return;
 
-      function syncTagChipsFromSelect() {
-        if (!tagSelect || !tagChipSelector) return;
-        const selectedIds = new Set(
-          Array.from(tagSelect.options)
-            .filter((option) => option.selected)
-            .map((option) => String(option.value))
-        );
-        const chipButtons = Array.from(tagChipSelector.querySelectorAll(".tag-chip-option[data-tag-id]"));
-        chipButtons.forEach((button) => {
-          const isActive = selectedIds.has(String(button.dataset.tagId || ""));
-          button.classList.toggle("is-active", isActive);
-          button.setAttribute("aria-pressed", isActive ? "true" : "false");
-        });
-        if (tagChipSummary) {
-          const selectedOptions = Array.from(tagSelect.options).filter((option) => option.selected);
-          if (selectedOptions.length === 0) {
-            tagChipSummary.textContent = "Selecciona etiquetas";
-          } else if (selectedOptions.length === 1) {
-            tagChipSummary.textContent = selectedOptions[0].textContent || "1 etiqueta";
-          } else {
-            tagChipSummary.textContent = `${selectedOptions.length} etiquetas seleccionadas`;
-          }
-        }
-      }
-
-      function closeTagDropdown() {
-        if (!tagDropdown || !tagChipToggle || !tagChipPanel) return;
-        tagDropdown.classList.remove("open");
-        tagChipToggle.setAttribute("aria-expanded", "false");
-        tagChipPanel.setAttribute("aria-hidden", "true");
-      }
-
-      function openTagDropdown() {
-        if (!tagDropdown || !tagChipToggle || !tagChipPanel) return;
-        tagDropdown.classList.add("open");
-        tagChipToggle.setAttribute("aria-expanded", "true");
-        tagChipPanel.setAttribute("aria-hidden", "false");
-      }
-
-      if (tagSelect && tagChipSelector) {
-        if (tagChipToggle) {
-          tagChipToggle.addEventListener("click", () => {
-            if (tagDropdown && tagDropdown.classList.contains("open")) {
-              closeTagDropdown();
-            } else {
-              openTagDropdown();
-            }
+        const syncTagChipsFromSelect = () => {
+          const selectedIds = new Set(
+            Array.from(tagSelect.options)
+              .filter((option) => option.selected)
+              .map((option) => String(option.value))
+          );
+          const chipButtons = Array.from(tagChipSelector.querySelectorAll(".tag-chip-option[data-tag-id]"));
+          chipButtons.forEach((button) => {
+            const isActive = selectedIds.has(String(button.dataset.tagId || ""));
+            button.classList.toggle("is-active", isActive);
+            button.setAttribute("aria-pressed", isActive ? "true" : "false");
           });
-        }
+          if (tagChipSummary) {
+            const selectedOptions = Array.from(tagSelect.options).filter((option) => option.selected);
+            if (selectedOptions.length === 0) {
+              tagChipSummary.textContent = "Selecciona etiquetas";
+            } else if (selectedOptions.length === 1) {
+              tagChipSummary.textContent = selectedOptions[0].textContent || "1 etiqueta";
+            } else if (selectedOptions.length <= 3) {
+              tagChipSummary.textContent = selectedOptions
+                .map((option) => (option.textContent || "").trim())
+                .filter(Boolean)
+                .join(" · ");
+            } else {
+              tagChipSummary.textContent = `${selectedOptions.length} etiquetas seleccionadas`;
+            }
+          }
+        };
+
+        const closeTagDropdown = () => {
+          dropdown.classList.remove("open");
+          tagChipToggle.setAttribute("aria-expanded", "false");
+          tagChipPanel.setAttribute("aria-hidden", "true");
+        };
+
+        const openTagDropdown = () => {
+          dropdown.classList.add("open");
+          tagChipToggle.setAttribute("aria-expanded", "true");
+          tagChipPanel.setAttribute("aria-hidden", "false");
+        };
+
+        tagChipToggle.addEventListener("click", () => {
+          if (dropdown.classList.contains("open")) {
+            closeTagDropdown();
+          } else {
+            openTagDropdown();
+          }
+        });
 
         tagChipSelector.addEventListener("click", (event) => {
           if (!(event.target instanceof Element)) return;
@@ -1742,20 +1744,32 @@
         });
 
         tagSelect.addEventListener("change", syncTagChipsFromSelect);
-        const addTaskForm = tagSelect.closest("form");
-        if (addTaskForm) {
-          addTaskForm.addEventListener("reset", () => {
+        const form = tagSelect.closest("form");
+        if (form) {
+          form.addEventListener("reset", () => {
             window.setTimeout(syncTagChipsFromSelect, 0);
           });
         }
+
         document.addEventListener("click", (event) => {
           if (!(event.target instanceof Element)) return;
-          if (tagDropdown && !tagDropdown.contains(event.target)) {
+          if (!dropdown.contains(event.target)) {
             closeTagDropdown();
           }
         });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            closeTagDropdown();
+          }
+        });
+
         syncTagChipsFromSelect();
       }
+
+      document.querySelectorAll("[data-tag-picker]").forEach((dropdown) => {
+        initTagPicker(dropdown);
+      });
 
       function applyHeaderMode(mode) {
         const value = mode === "normal" ? "normal" : "sticky";

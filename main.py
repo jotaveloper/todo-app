@@ -4,10 +4,13 @@ from datetime import date, timedelta
 from datetime import datetime
 import json
 import os
+import secrets
 from pathlib import Path
 from functools import lru_cache
+from urllib.parse import urlencode
+import requests
 
-from flask import Flask, jsonify, make_response, redirect, render_template, request, url_for, flash
+from flask import Flask, jsonify, make_response, redirect, render_template, request, url_for, flash, session
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -45,19 +48,21 @@ except ImportError:  # pragma: no cover - fallback cuando dependencia no está i
     find_dotenv = None
 
 if load_dotenv is not None:
-    dotenv_path = find_dotenv(usecwd=True) if find_dotenv is not None else ""
-    if not dotenv_path:
-        dotenv_path = str(Path(__file__).resolve().parent / ".env")
-    load_dotenv(dotenv_path)
+    load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "todoapp-dev-secret-change-this")
+app.config["SESSION_COOKIE_NAME"] = "todoapp_session"
+app.config["SESSION_PERMANENT"] = False
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
 GOOGLE_DISCOVERY_URL = os.getenv(
     "GOOGLE_DISCOVERY_URL",
     "https://accounts.google.com/.well-known/openid-configuration",
 ).strip()
+MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "").strip()
+MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET", "").strip()
+MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID", "").strip()
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "tasks.db"
 VALID_FILTERS = {"all", "pending", "completed", "overdue", "upcoming", "today"}
@@ -97,6 +102,8 @@ login_manager.login_message = "Inicia sesión para continuar."
 login_manager.login_message_category = "error"
 
 oauth_client = None
+microsoft_oauth_client = None
+github_oauth_client = None
 oauth = OAuth(app) if OAuth is not None else None
 
 
@@ -126,7 +133,7 @@ def get_user_by_email(email):
     if not normalized:
         return None
     return pg_fetch_one_dict(
-        "SELECT id, name, email, password_hash, auth_provider, google_id "
+        "SELECT id, name, email, password_hash, auth_provider, google_id, microsoft_id, github_id "
         "FROM users WHERE LOWER(email) = LOWER(%s)",
         (normalized,),
     )
@@ -137,8 +144,30 @@ def get_user_by_google_id(google_id):
     if not normalized:
         return None
     return pg_fetch_one_dict(
-        "SELECT id, name, email, password_hash, auth_provider, google_id "
+        "SELECT id, name, email, password_hash, auth_provider, google_id, microsoft_id, github_id "
         "FROM users WHERE google_id = %s",
+        (normalized,),
+    )
+
+
+def get_user_by_microsoft_id(microsoft_id):
+    normalized = (microsoft_id or "").strip()
+    if not normalized:
+        return None
+    return pg_fetch_one_dict(
+        "SELECT id, name, email, password_hash, auth_provider, google_id, microsoft_id, github_id "
+        "FROM users WHERE microsoft_id = %s",
+        (normalized,),
+    )
+
+
+def get_user_by_github_id(github_id):
+    normalized = (github_id or "").strip()
+    if not normalized:
+        return None
+    return pg_fetch_one_dict(
+        "SELECT id, name, email, password_hash, auth_provider, google_id, microsoft_id, github_id "
+        "FROM users WHERE github_id = %s",
         (normalized,),
     )
 
@@ -182,6 +211,63 @@ def get_google_oauth_client():
     return oauth_client
 
 
+def get_microsoft_oauth_client():
+    global microsoft_oauth_client
+    if microsoft_oauth_client is not None:
+        return microsoft_oauth_client
+    if oauth is None:
+        return None
+
+    client_id = os.getenv("MICROSOFT_CLIENT_ID")
+    client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+    tenant_id = os.getenv("MICROSOFT_TENANT_ID")
+    if client_id:
+        client_id = client_id.strip()
+    if client_secret:
+        client_secret = client_secret.strip()
+    if tenant_id:
+        tenant_id = tenant_id.strip()
+    if not client_id or not client_secret or not tenant_id:
+        raise Exception("Microsoft OAuth env vars missing")
+
+    server_metadata_url = (
+        f"https://login.microsoftonline.com/{tenant_id}/v2.0/.well-known/openid-configuration"
+    )
+    print("MICROSOFT METADATA URL:", server_metadata_url)
+    microsoft_oauth_client = oauth.register(
+        name="microsoft",
+        server_metadata_url=server_metadata_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        client_kwargs={"scope": "openid profile email User.Read"},
+    )
+    return microsoft_oauth_client
+
+
+def get_github_oauth_client():
+    global github_oauth_client
+    if github_oauth_client is not None:
+        return github_oauth_client
+    if oauth is None:
+        return None
+
+    client_id = (os.getenv("GITHUB_CLIENT_ID") or "").strip()
+    client_secret = (os.getenv("GITHUB_CLIENT_SECRET") or "").strip()
+    if not client_id or not client_secret:
+        return None
+
+    github_oauth_client = oauth.register(
+        name="github",
+        client_id=client_id,
+        client_secret=client_secret,
+        access_token_url="https://github.com/login/oauth/access_token",
+        authorize_url="https://github.com/login/oauth/authorize",
+        api_base_url="https://api.github.com/",
+        client_kwargs={"scope": "read:user user:email"},
+    )
+    return github_oauth_client
+
+
 def is_google_login_enabled():
     return bool(
         (os.getenv("GOOGLE_CLIENT_ID") or "").strip() and
@@ -189,9 +275,58 @@ def is_google_login_enabled():
     )
 
 
+def is_microsoft_login_enabled():
+    return bool(
+        (os.getenv("MICROSOFT_CLIENT_ID") or "").strip() and
+        (os.getenv("MICROSOFT_CLIENT_SECRET") or "").strip() and
+        (os.getenv("MICROSOFT_TENANT_ID") or "").strip()
+    )
+
+
+def is_github_login_enabled():
+    return bool(
+        (os.getenv("GITHUB_CLIENT_ID") or "").strip() and
+        (os.getenv("GITHUB_CLIENT_SECRET") or "").strip()
+    )
+
+
+def clean_user_email_for_display(raw_email):
+    email = (raw_email or "").strip()
+    if not email:
+        return ""
+    # Microsoft guest UPN fallback: user_domain.com#EXT#@tenant.onmicrosoft.com
+    # Try to recover a human email-like form for UI display only.
+    lowered = email.lower()
+    if "#ext#@" in lowered and lowered.endswith(".onmicrosoft.com"):
+        marker_index = lowered.find("#ext#@")
+        prefix = email[:marker_index] if marker_index != -1 else email
+        candidates = [prefix]
+        if "_" in prefix:
+            local_part, domain_part = prefix.rsplit("_", 1)
+            candidates.append(f"{local_part}@{domain_part}")
+            candidates.append(prefix.replace("_", "@", 1))
+        for candidate in candidates:
+            candidate_norm = normalize_email(candidate)
+            if candidate_norm and is_valid_email(candidate_norm):
+                return candidate_norm
+    normalized = normalize_email(email)
+    if normalized and is_valid_email(normalized):
+        return normalized
+    # Last fallback: keep the stored value only if it is valid as an email.
+    return email if is_valid_email(email) else ""
+
+
 @app.context_processor
 def inject_auth_context():
-    return {"google_login_enabled": is_google_login_enabled()}
+    display_email = ""
+    if current_user.is_authenticated:
+        display_email = clean_user_email_for_display(getattr(current_user, "email", ""))
+    return {
+        "google_login_enabled": is_google_login_enabled(),
+        "microsoft_login_enabled": is_microsoft_login_enabled(),
+        "github_login_enabled": is_github_login_enabled(),
+        "user_display_email": display_email,
+    }
 
 
 def get_connection():
@@ -806,7 +941,7 @@ def build_task_where_clause(
     quick_date,
     selected_project_id,
     selected_project_none,
-    selected_tag_id,
+    selected_tag_ids,
 ):
     today_iso = date.today().isoformat()
     pg_where_parts = ["user_id = %s"]
@@ -848,9 +983,12 @@ def build_task_where_clause(
     elif selected_project_id is not None:
         pg_where_parts.append("project_id = %s")
         pg_params.append(selected_project_id)
-    if selected_tag_id is not None:
-        pg_where_parts.append("id IN (SELECT task_id FROM task_tags WHERE tag_id = %s)")
-        pg_params.append(selected_tag_id)
+    if selected_tag_ids:
+        placeholders = ",".join(["%s"] * len(selected_tag_ids))
+        pg_where_parts.append(
+            f"id IN (SELECT task_id FROM task_tags WHERE tag_id IN ({placeholders}))"
+        )
+        pg_params.extend(selected_tag_ids)
 
     pg_where_clause = f"WHERE {' AND '.join(pg_where_parts)}" if pg_where_parts else ""
     return pg_where_clause, tuple(pg_params)
@@ -1651,6 +1789,8 @@ def ensure_users_table():
                     password_hash TEXT,
                     auth_provider TEXT NOT NULL DEFAULT 'local',
                     google_id TEXT,
+                    microsoft_id TEXT,
+                    github_id TEXT,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -1688,6 +1828,18 @@ def ensure_users_table():
             cur.execute(
                 """
                 ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS microsoft_id TEXT
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS github_id TEXT
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE users
                 ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 """
             )
@@ -1702,6 +1854,20 @@ def ensure_users_table():
                 CREATE UNIQUE INDEX IF NOT EXISTS users_google_id_unique
                 ON users (google_id)
                 WHERE google_id IS NOT NULL
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS users_microsoft_id_unique
+                ON users (microsoft_id)
+                WHERE microsoft_id IS NOT NULL
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS users_github_id_unique
+                ON users (github_id)
+                WHERE github_id IS NOT NULL
                 """
             )
         conn.commit()
@@ -1759,6 +1925,36 @@ def ensure_tags_tables():
         conn.commit()
 
 
+def migrate_legacy_task_tag_links():
+    """Migra relaciones antiguas task->tag desde columnas legacy hacia task_tags."""
+    with get_postgres_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'tasks'
+                  AND column_name IN ('tag_id', 'label_id')
+                """
+            )
+            legacy_columns = [row[0] for row in cur.fetchall()]
+            for column_name in legacy_columns:
+                cur.execute(
+                    f"""
+                    INSERT INTO task_tags (task_id, tag_id)
+                    SELECT tk.id, tk.{column_name}
+                    FROM tasks tk
+                    INNER JOIN tags tg
+                        ON tg.id = tk.{column_name}
+                       AND tg.user_id = tk.user_id
+                    WHERE tk.{column_name} IS NOT NULL
+                    ON CONFLICT DO NOTHING
+                    """
+                )
+        conn.commit()
+
+
 def get_projects(user_id=None):
     owner_id = user_id if user_id is not None else current_user_id()
     if owner_id is None:
@@ -1780,7 +1976,7 @@ def get_tags(user_id=None):
     if owner_id is None:
         return []
     rows = pg_fetch_all_dicts(
-        "SELECT t.id, t.name, COALESCE(t.color, '#22c55e') AS color, "
+        "SELECT t.id, t.name, COALESCE(NULLIF(TRIM(t.color), ''), '#22c55e') AS color, "
         "COUNT(tk.id) AS task_count "
         "FROM tags t "
         "LEFT JOIN task_tags tt ON tt.tag_id = t.id "
@@ -1795,15 +1991,33 @@ def get_tags(user_id=None):
 
 
 def get_selected_tag_id():
-    raw = request.args.get("tag_id") or request.form.get("tag_id") or ""
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        parsed = int(raw)
-    except ValueError:
-        return None
-    return parsed if parsed > 0 else None
+    selected = get_selected_tag_ids()
+    return selected[0] if selected else None
+
+
+def get_selected_tag_ids():
+    raw_values = []
+    for source in (request.args.getlist("tag_id"), request.form.getlist("tag_id")):
+        raw_values.extend(source)
+
+    normalized = []
+    seen = set()
+    for raw in raw_values:
+        text = (raw or "").strip()
+        if not text:
+            continue
+        for chunk in text.split(","):
+            candidate = chunk.strip()
+            if not candidate:
+                continue
+            try:
+                parsed = int(candidate)
+            except ValueError:
+                continue
+            if parsed > 0 and parsed not in seen:
+                seen.add(parsed)
+                normalized.append(parsed)
+    return normalized
 
 
 def get_tag_ids_from_form():
@@ -1867,7 +2081,8 @@ def get_task_tags_map(task_ids, user_id=None):
         return {}
     placeholders = ",".join(["%s"] * len(task_ids))
     rows = pg_fetch_all_dicts(
-        "SELECT tt.task_id, t.id AS tag_id, t.name, COALESCE(t.color, '#22c55e') AS color "
+        "SELECT tt.task_id, t.id AS tag_id, t.name, "
+        "COALESCE(NULLIF(TRIM(t.color), ''), '#22c55e') AS color "
         "FROM task_tags tt "
         "INNER JOIN tags t ON t.id = tt.tag_id "
         "INNER JOIN tasks tk ON tk.id = tt.task_id "
@@ -1960,7 +2175,14 @@ def get_user_settings_summary(user_id=None):
         (owner_id,),
     )
     provider = (row or {}).get("auth_provider") or "local"
-    provider_label = "Google" if provider == "google" else "Local"
+    if provider == "google":
+        provider_label = "Google"
+    elif provider == "microsoft":
+        provider_label = "Microsoft"
+    elif provider == "github":
+        provider_label = "GitHub"
+    else:
+        provider_label = "Local"
     created_raw = (row or {}).get("created_at")
     created_label = "Sin fecha"
     if isinstance(created_raw, datetime):
@@ -1992,6 +2214,7 @@ def init_db():
     ensure_tags_tables()
     default_user_id = get_default_user_id()
     backfill_user_ownership(default_user_id)
+    migrate_legacy_task_tag_links()
     with get_connection() as conn:
         conn.execute(
             """
@@ -2126,7 +2349,17 @@ def init_db():
 def require_login_for_app_routes():
     if request.endpoint is None:
         return None
-    allowed_endpoints = {"static", "login", "register", "auth_google", "google_callback"}
+    allowed_endpoints = {
+        "static",
+        "login",
+        "register",
+        "auth_google",
+        "google_callback",
+        "auth_microsoft",
+        "microsoft_callback",
+        "auth_github",
+        "github_callback",
+    }
     if request.endpoint in allowed_endpoints:
         return None
     if current_user.is_authenticated:
@@ -2224,6 +2457,11 @@ def login():
 def auth_google():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
+    # Evita mismatch de redirect_uri/state cuando se mezcla 127.0.0.1 y localhost.
+    if request.host.startswith("127.0.0.1"):
+        normalized = "http://localhost:5050/auth/google"
+        print("[GOOGLE-OAUTH] normalize-host redirect:", request.host_url, "->", normalized)
+        return redirect(normalized)
     client = get_google_oauth_client()
     if client is None:
         if OAUTH_IMPORT_ERROR:
@@ -2231,14 +2469,23 @@ def auth_google():
         else:
             flash("Google login no está configurado en este entorno.", "error")
         return redirect(url_for("login"))
-    redirect_uri = url_for("google_callback", _external=True)
-    return client.authorize_redirect(redirect_uri)
+    redirect_uri = "http://localhost:5050/auth/google/callback"
+    print("[GOOGLE-OAUTH] auth host:", request.host_url)
+    print("[GOOGLE-OAUTH] redirect_uri:", redirect_uri)
+    print("[GOOGLE-OAUTH] SESSION BEFORE REDIRECT:", dict(session))
+    response = client.authorize_redirect(redirect_uri)
+    print("[GOOGLE-OAUTH] SESSION AFTER REDIRECT PREP:", dict(session))
+    return response
 
 
 @app.route("/auth/google/callback")
+@app.route("/login/google/callback")
 def google_callback():
     if current_user.is_authenticated:
         return redirect(url_for("index"))
+    print("[GOOGLE-OAUTH] callback host:", request.host_url)
+    print("[GOOGLE-OAUTH] callback full_path:", request.full_path)
+    print("[GOOGLE-OAUTH] SESSION IN CALLBACK:", dict(session))
     client = get_google_oauth_client()
     if client is None:
         if OAUTH_IMPORT_ERROR:
@@ -2249,7 +2496,11 @@ def google_callback():
 
     try:
         token = client.authorize_access_token()
-    except Exception:
+    except Exception as e:
+        import traceback
+        print("GOOGLE OAUTH ERROR:")
+        print(str(e))
+        traceback.print_exc()
         flash("No se pudo completar la autenticación con Google.", "error")
         return redirect(url_for("login"))
 
@@ -2320,6 +2571,341 @@ def google_callback():
 
     login_user(User(user_id, name, email))
     flash("Inicio de sesión con Google correcto.", "ok")
+    return redirect(url_for("index"))
+
+
+@app.route("/auth/microsoft")
+@app.route("/login/microsoft")
+def auth_microsoft():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+    # Evita mismatch de state/cookie entre 127.0.0.1 y localhost.
+    if request.host.startswith("127.0.0.1"):
+        normalized = "http://localhost:5050/auth/microsoft"
+        print("[MS-OAUTH] normalize-host redirect:", request.host_url, "->", normalized)
+        return redirect(normalized)
+    client = get_microsoft_oauth_client()
+    if client is None:
+        if OAUTH_IMPORT_ERROR:
+            flash("Microsoft login no está disponible: falta dependencia OAuth.", "error")
+        else:
+            flash("Microsoft login no está configurado en este entorno.", "error")
+        return redirect(url_for("login"))
+    redirect_uri = "http://localhost:5050/auth/microsoft/callback"
+    print("[MS-OAUTH] auth host:", request.host_url)
+    print("[MS-OAUTH] redirect_uri:", redirect_uri)
+    print("[MS-OAUTH] SESSION BEFORE REDIRECT:", dict(session))
+    try:
+        response = client.authorize_redirect(
+            redirect_uri,
+            response_mode="query",
+            prompt="select_account",
+        )
+        print("[MS-OAUTH] SESSION AFTER REDIRECT PREP:", dict(session))
+        return response
+    except Exception:
+        flash("No se pudo iniciar la autenticación con Microsoft.", "error")
+        return redirect(url_for("login"))
+
+
+@app.route("/auth/microsoft/callback")
+def microsoft_callback():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+    print("[MS-OAUTH] callback host:", request.host_url)
+    print("[MS-OAUTH] callback full_path:", request.full_path)
+    print("[MS-OAUTH] SESSION IN CALLBACK:", dict(session))
+    client = get_microsoft_oauth_client()
+    if client is None:
+        if OAUTH_IMPORT_ERROR:
+            flash("Microsoft login no está disponible: falta dependencia OAuth.", "error")
+        else:
+            flash("Microsoft login no está configurado en este entorno.", "error")
+        return redirect(url_for("login"))
+
+    oauth_error = (request.args.get("error") or "").strip()
+    if oauth_error:
+        flash("No se pudo completar la autenticación con Microsoft.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        client.authorize_access_token()
+    except Exception as e:
+        import traceback
+        print("MICROSOFT OAUTH ERROR:")
+        print(str(e))
+        traceback.print_exc()
+        flash("No se pudo completar la autenticación con Microsoft.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        profile_response = client.get("https://graph.microsoft.com/v1.0/me")
+        profile = profile_response.json() if profile_response is not None else None
+    except Exception:
+        profile = None
+
+    if not isinstance(profile, dict):
+        flash("No fue posible obtener los datos del perfil de Microsoft.", "error")
+        return redirect(url_for("login"))
+
+    email = normalize_email(profile.get("mail") or profile.get("userPrincipalName"))
+    name = (profile.get("displayName") or "").strip()
+    microsoft_id = (profile.get("id") or "").strip()
+
+    if not email or not is_valid_email(email):
+        flash("Microsoft no devolvió un email válido.", "error")
+        return redirect(url_for("login"))
+    if not microsoft_id:
+        flash("Microsoft no devolvió un identificador de cuenta.", "error")
+        return redirect(url_for("login"))
+    if not name:
+        name = email.split("@")[0]
+
+    existing_by_microsoft = get_user_by_microsoft_id(microsoft_id)
+    existing_by_email = get_user_by_email(email)
+
+    if existing_by_microsoft is not None:
+        login_user(
+            User(
+                existing_by_microsoft["id"],
+                existing_by_microsoft["name"],
+                existing_by_microsoft["email"],
+            )
+        )
+        flash("Inicio de sesión con Microsoft correcto.", "ok")
+        return redirect(url_for("index"))
+
+    if existing_by_email is not None:
+        existing_ms_id = (existing_by_email.get("microsoft_id") or "").strip()
+        if existing_ms_id and existing_ms_id != microsoft_id:
+            flash("Este email ya está vinculado a otra cuenta de Microsoft.", "error")
+            return redirect(url_for("login"))
+        with get_postgres_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users "
+                    "SET name = COALESCE(NULLIF(name, ''), %s), microsoft_id = %s "
+                    "WHERE id = %s",
+                    (name, microsoft_id, existing_by_email["id"]),
+                )
+            conn.commit()
+        merged_user = get_user_by_email(email)
+        login_user(User(merged_user["id"], merged_user["name"], merged_user["email"]))
+        flash("Cuenta vinculada con Microsoft correctamente.", "ok")
+        return redirect(url_for("index"))
+
+    with get_postgres_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO users (name, email, password_hash, auth_provider, microsoft_id) "
+                "VALUES (%s, %s, %s, 'microsoft', %s) RETURNING id",
+                (name, email, None, microsoft_id),
+            )
+            inserted = cur.fetchone()
+            user_id = inserted[0] if inserted else None
+        conn.commit()
+
+    if user_id is None:
+        flash("No se pudo crear la cuenta con Microsoft.", "error")
+        return redirect(url_for("login"))
+
+    login_user(User(user_id, name, email))
+    flash("Inicio de sesión con Microsoft correcto.", "ok")
+    return redirect(url_for("index"))
+
+
+@app.route("/auth/github")
+@app.route("/login/github")
+def auth_github():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+    if request.host.startswith("127.0.0.1"):
+        normalized = "http://localhost:5050/auth/github"
+        print("[GH-OAUTH] normalize-host redirect:", request.host_url, "->", normalized)
+        return redirect(normalized)
+    client_id = (os.getenv("GITHUB_CLIENT_ID") or "").strip()
+    if not client_id:
+        if OAUTH_IMPORT_ERROR:
+            flash("GitHub login no está disponible: falta dependencia OAuth.", "error")
+        else:
+            flash("GitHub login no está configurado en este entorno.", "error")
+        return redirect(url_for("login"))
+    print("GITHUB CLIENT_ID LOADED:", bool(client_id), "prefix:", client_id[:6] if client_id else "")
+    redirect_uri = "http://localhost:5050/auth/github/callback"
+    state = secrets.token_urlsafe(24)
+    session["github_oauth_state"] = state
+    print("GITHUB STATE SAVED:", session.get("github_oauth_state"))
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "read:user user:email",
+        "state": state,
+    }
+    final_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
+    print("GITHUB FINAL AUTHORIZE URL:", final_url)
+    return redirect(final_url)
+
+
+@app.route("/auth/github/callback")
+@app.route("/login/github/callback")
+def github_callback():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+    print("GITHUB CALLBACK HIT:", request.full_path)
+    print("GITHUB CALLBACK STATE RETURNED:", request.args.get("state"))
+
+    client_id = (os.getenv("GITHUB_CLIENT_ID") or "").strip()
+    client_secret = (os.getenv("GITHUB_CLIENT_SECRET") or "").strip()
+    if not client_id or not client_secret:
+        flash("GitHub login no está configurado en este entorno.", "error")
+        return redirect(url_for("login"))
+
+    expected_state = session.pop("github_oauth_state", "")
+    returned_state = (request.args.get("state") or "").strip()
+    print("GITHUB CALLBACK STATE IN SESSION:", expected_state)
+    if not expected_state or not returned_state or expected_state != returned_state:
+        flash("No se pudo completar la autenticación con GitHub.", "error")
+        return redirect(url_for("login"))
+
+    oauth_error = (request.args.get("error") or "").strip()
+    if oauth_error:
+        flash("No se pudo completar la autenticación con GitHub.", "error")
+        return redirect(url_for("login"))
+
+    code = (request.args.get("code") or "").strip()
+    if not code:
+        flash("No se pudo completar la autenticación con GitHub.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        token_response = requests.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+            },
+            timeout=20,
+        )
+        token_payload = token_response.json() if token_response is not None else {}
+        access_token = (token_payload.get("access_token") or "").strip()
+        print("GITHUB TOKEN EXCHANGE STATUS:", getattr(token_response, "status_code", "unknown"))
+        print("GITHUB TOKEN EXCHANGE OK:", bool(access_token))
+        if not access_token:
+            raise ValueError("GitHub token exchange failed")
+
+        profile_response = requests.get(
+            "https://api.github.com/user",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {access_token}",
+            },
+            timeout=20,
+        )
+        profile = profile_response.json() if profile_response is not None else None
+        profile = profile if isinstance(profile, dict) else {}
+
+        github_id = str(profile.get("id") or "").strip()
+        name = (profile.get("name") or profile.get("login") or "").strip()
+        email = normalize_email(profile.get("email"))
+
+        if not email:
+            emails_response = requests.get(
+                "https://api.github.com/user/emails",
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": f"Bearer {access_token}",
+                },
+                timeout=20,
+            )
+            emails_payload = emails_response.json() if emails_response is not None else None
+            if isinstance(emails_payload, list):
+                primary_email = None
+                verified_email = None
+                any_email = None
+                for row in emails_payload:
+                    if not isinstance(row, dict):
+                        continue
+                    current = normalize_email(row.get("email"))
+                    if not current:
+                        continue
+                    if any_email is None:
+                        any_email = current
+                    if row.get("verified") and verified_email is None:
+                        verified_email = current
+                    if row.get("primary"):
+                        primary_email = current
+                        if row.get("verified"):
+                            break
+                email = primary_email or verified_email or any_email
+    except Exception as e:
+        import traceback
+        print("GITHUB OAUTH ERROR:")
+        print(str(e))
+        traceback.print_exc()
+        flash("No se pudo completar la autenticación con GitHub.", "error")
+        return redirect(url_for("login"))
+
+    if not github_id:
+        flash("GitHub no devolvió un identificador de cuenta.", "error")
+        return redirect(url_for("login"))
+    if not email or not is_valid_email(email):
+        flash("GitHub no devolvió un email válido.", "error")
+        return redirect(url_for("login"))
+    if not name:
+        name = email.split("@")[0]
+
+    existing_by_github = get_user_by_github_id(github_id)
+    existing_by_email = get_user_by_email(email)
+
+    if existing_by_github is not None:
+        login_user(
+            User(
+                existing_by_github["id"],
+                existing_by_github["name"],
+                existing_by_github["email"],
+            )
+        )
+        flash("Inicio de sesión con GitHub correcto.", "ok")
+        return redirect(url_for("index"))
+
+    if existing_by_email is not None:
+        existing_gh_id = (existing_by_email.get("github_id") or "").strip()
+        if existing_gh_id and existing_gh_id != github_id:
+            flash("Este email ya está vinculado a otra cuenta de GitHub.", "error")
+            return redirect(url_for("login"))
+        with get_postgres_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users "
+                    "SET name = COALESCE(NULLIF(name, ''), %s), github_id = %s "
+                    "WHERE id = %s",
+                    (name, github_id, existing_by_email["id"]),
+                )
+            conn.commit()
+        merged_user = get_user_by_email(email)
+        login_user(User(merged_user["id"], merged_user["name"], merged_user["email"]))
+        flash("Cuenta vinculada con GitHub correctamente.", "ok")
+        return redirect(url_for("index"))
+
+    with get_postgres_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO users (name, email, password_hash, auth_provider, github_id) "
+                "VALUES (%s, %s, %s, 'github', %s) RETURNING id",
+                (name, email, None, github_id),
+            )
+            inserted = cur.fetchone()
+            user_id = inserted[0] if inserted else None
+        conn.commit()
+
+    if user_id is None:
+        flash("No se pudo crear la cuenta con GitHub.", "error")
+        return redirect(url_for("login"))
+
+    login_user(User(user_id, name, email))
+    flash("Inicio de sesión con GitHub correcto.", "ok")
     return redirect(url_for("index"))
 
 
@@ -2456,11 +3042,8 @@ def index():
     selected_project_id = normalize_project_id(get_selected_project_id(), user_id=owner_id)
     if not selected_project_none and selected_project_filter_value and selected_project_id is None:
         selected_project_filter_value = ""
-    selected_tag_raw = get_selected_tag_id()
-    selected_tag_id = None
-    if selected_tag_raw is not None:
-        valid_tags = normalize_tag_ids([selected_tag_raw], user_id=owner_id)
-        selected_tag_id = valid_tags[0] if valid_tags else None
+    selected_tag_ids = normalize_tag_ids(get_selected_tag_ids(), user_id=owner_id)
+    selected_tag_id = selected_tag_ids[0] if selected_tag_ids else None
     import_status = request.args.get("import_status", "").strip()
     import_message = request.args.get("import_message", "").strip()
     category_status = request.args.get("category_status", "").strip()
@@ -2474,7 +3057,7 @@ def index():
         quick_date,
         selected_project_id,
         selected_project_none,
-        selected_tag_id,
+        selected_tag_ids,
     )
     rows = pg_fetch_all_dicts(
         f"SELECT {pg_task_select_clause()} FROM tasks {pg_where_clause} ORDER BY {order_clause}",
@@ -2584,11 +3167,8 @@ def partial_tasks():
     selected_project_id = normalize_project_id(get_selected_project_id(), user_id=owner_id)
     if not selected_project_none and selected_project_filter_value and selected_project_id is None:
         selected_project_filter_value = ""
-    selected_tag_raw = get_selected_tag_id()
-    selected_tag_id = None
-    if selected_tag_raw is not None:
-        valid_tags = normalize_tag_ids([selected_tag_raw], user_id=owner_id)
-        selected_tag_id = valid_tags[0] if valid_tags else None
+    selected_tag_ids = normalize_tag_ids(get_selected_tag_ids(), user_id=owner_id)
+    selected_tag_id = selected_tag_ids[0] if selected_tag_ids else None
 
     order_clause = pg_task_order_by(current_sort)
     pg_where_clause, pg_params = build_task_where_clause(
@@ -2599,7 +3179,7 @@ def partial_tasks():
         quick_date,
         selected_project_id,
         selected_project_none,
-        selected_tag_id,
+        selected_tag_ids,
     )
 
     rows = pg_fetch_all_dicts(
@@ -3445,4 +4025,4 @@ init_db()
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5050, debug=True)
+    app.run(host="localhost", port=5050, debug=True, use_reloader=False)
