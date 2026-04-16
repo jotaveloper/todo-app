@@ -2422,6 +2422,7 @@ def login():
     if request.method == "POST":
         email = normalize_email(request.form.get("email"))
         password = request.form.get("password") or ""
+        remember_me = bool(request.form.get("remember_me"))
         if not email:
             flash("El email es obligatorio.", "error")
             login_failed = True
@@ -2442,7 +2443,7 @@ def login():
             flash("Correo o contraseña incorrectos.", "error")
             login_failed = True
         else:
-            login_user(User(user_row["id"], user_row["name"], user_row["email"]))
+            login_user(User(user_row["id"], user_row["name"], user_row["email"]), remember=remember_me)
             flash("Inicio de sesión correcto.", "ok")
             next_target = request.args.get("next") or request.form.get("next")
             if next_target and is_safe_redirect_target(next_target):

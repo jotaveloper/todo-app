@@ -16,15 +16,11 @@
 <body class="auth-page">
   <main class="auth-card auth-login-card auth-login-main {{ 'auth-shake' if login_failed else '' }}">
     <div class="auth-login-head">
-      <div class="auth-product-brand" aria-label="TODOAPP">
-        <span class="auth-product-brand-icon" aria-hidden="true">✓</span>
-        <div class="auth-product-brand-copy">
-          <strong>TODOAPP</strong>
-          <p>Organiza y avanza</p>
-        </div>
-      </div>
-      <h1 class="auth-title">Iniciar sesión</h1>
-      <p class="auth-subtitle">Accede a tu espacio de trabajo en TODOAPP.</p>
+      <h1 class="auth-title auth-welcome-title">
+        Hola,
+        <span id="welcome-word" class="auth-welcome-word" aria-live="polite" aria-atomic="true">Bienvenido</span>
+        de vuelta
+      </h1>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -92,7 +88,17 @@
     </form>
 
     <div class="auth-form-links">
-      <p class="auth-alt-link">¿No tienes cuenta? <a href="{{ url_for('register') }}">Crear cuenta</a></p>
+      <label for="remember_me" class="auth-remember-option">
+        <input
+          type="checkbox"
+          id="remember_me"
+          name="remember_me"
+          value="1"
+          form="login-form"
+          {% if request.form.get('remember_me') %}checked{% endif %}
+        >
+        <span>Recordar mis datos</span>
+      </label>
       <a href="#" class="auth-forgot-link" aria-disabled="true">¿Olvidaste tu contraseña?</a>
     </div>
 
@@ -122,6 +128,8 @@
         <span>Continuar con GitHub</span>
       </a>
     </div>
+
+    <p class="auth-alt-link auth-register-below">¿No tienes una cuenta? <a href="{{ url_for('register') }}">Crear cuenta</a></p>
 
     <footer class="auth-legal-links">
       <a href="#" aria-disabled="true">Términos de uso</a>
@@ -236,6 +244,45 @@
       if (hasServerAuthError && passwordInput.value.length >= MIN_PASSWORD_LENGTH) {
         setState(passwordWrap, "invalid");
         passwordFeedback.textContent = "Revisa tus credenciales e inténtalo de nuevo.";
+      }
+
+      const welcomeWord = document.getElementById("welcome-word");
+      if (welcomeWord) {
+        const words = ["Bienvenido", "Bienvenida"];
+        let wordIndex = words.indexOf(welcomeWord.textContent.trim());
+        if (wordIndex === -1) wordIndex = 0;
+        welcomeWord.textContent = words[wordIndex];
+
+        const setStableWordWidth = () => {
+          const probe = document.createElement("span");
+          probe.style.position = "absolute";
+          probe.style.visibility = "hidden";
+          probe.style.pointerEvents = "none";
+          probe.style.whiteSpace = "nowrap";
+          probe.style.font = window.getComputedStyle(welcomeWord).font;
+          probe.style.fontWeight = window.getComputedStyle(welcomeWord).fontWeight;
+          probe.style.letterSpacing = window.getComputedStyle(welcomeWord).letterSpacing;
+          document.body.appendChild(probe);
+          let maxWidth = 0;
+          for (const word of words) {
+            probe.textContent = word;
+            maxWidth = Math.max(maxWidth, probe.getBoundingClientRect().width);
+          }
+          document.body.removeChild(probe);
+          welcomeWord.style.width = `${Math.ceil(maxWidth)}px`;
+        };
+
+        setStableWordWidth();
+        window.addEventListener("resize", setStableWordWidth, { passive: true });
+
+        window.setInterval(() => {
+          welcomeWord.classList.add("is-fading");
+          window.setTimeout(() => {
+            wordIndex = (wordIndex + 1) % words.length;
+            welcomeWord.textContent = words[wordIndex];
+            welcomeWord.classList.remove("is-fading");
+          }, 170);
+        }, 3000);
       }
     })();
   </script>
